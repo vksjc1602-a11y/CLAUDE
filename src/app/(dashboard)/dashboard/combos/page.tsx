@@ -231,7 +231,7 @@ const NON_PERSISTED_COMBO_CONFIG_KEYS = new Set([
   "healthCheckTimeoutMs",
 ]);
 
-function sanitizeComboRuntimeConfig(config) {
+function sanitizeComboRuntimeConfig(config: unknown): Record<string, any> {
   if (!config || typeof config !== "object") return {};
   return Object.fromEntries(
     Object.entries(config).filter(
