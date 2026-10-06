@@ -1426,8 +1426,8 @@ export async function handleOpenAIImageEdit({
   provider: string;
   credentials:
     | {
-        apiKey?: string;
-        accessToken?: string;
+        apiKey?: string | null;
+        accessToken?: string | null;
         baseUrl?: unknown;
         providerSpecificData?: { baseUrl?: unknown } | null;
       }
@@ -1545,8 +1545,8 @@ export async function handleOpenRouterImageEdit({
   baseUrl: string;
   credentials:
     | {
-        apiKey?: string;
-        accessToken?: string;
+        apiKey?: string | null;
+        accessToken?: string | null;
       }
     | null
     | undefined;
@@ -2812,6 +2812,15 @@ export function saveImageSuccessResult({
   created = null,
   images,
   path = "/v1/images/generations",
+}: {
+  provider: string;
+  model: string;
+  startTime: number;
+  requestBody?: unknown;
+  responseBody?: unknown;
+  created?: number | null;
+  images: unknown;
+  path?: string;
 }) {
   saveCallLog({
     method: "POST",
