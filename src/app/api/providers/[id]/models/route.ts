@@ -531,9 +531,12 @@ export async function GET(
       }
 
       try {
+        const specificData =
+          connection.providerSpecificData && typeof connection.providerSpecificData === "object"
+            ? (connection.providerSpecificData as Record<string, unknown>)
+            : undefined;
         const graphqlEndpoint =
-          (typeof connection.providerSpecificData?.graphqlEndpoint === "string" &&
-            connection.providerSpecificData.graphqlEndpoint) ||
+          (typeof specificData?.graphqlEndpoint === "string" && specificData.graphqlEndpoint) ||
           process.env.PROMPTQL_GRAPHQL_ENDPOINT ||
           "https://data.prompt.ql.app/promptql/playground-v2-hge/v1/graphql";
         const discovered = await discoverPromptQlModels({
@@ -1537,8 +1540,7 @@ export async function GET(
 
         const modelsResp = await safeOutboundFetch(
           "https://platformapi.innerai.com/api/v1/ai_models",
-          { headers: innerAiHeaders },
-          getProviderOutboundGuard(provider)
+          { headers: innerAiHeaders, guard: getProviderOutboundGuard() }
         );
         if (!modelsResp.ok) {
           throw new Error(`Inner.ai models API returned HTTP ${modelsResp.status}`);
