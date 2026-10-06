@@ -41,6 +41,7 @@ import { ROUTING_STRATEGIES } from "@/shared/constants/routingStrategies";
 import {
   COMBO_BUILDER_AUTO_CONNECTION,
   COMBO_BUILDER_STAGES,
+  type ComboBuilderStage,
   addAllGlobalSearchMatches,
   addGlobalModelStep,
   buildGlobalModelList,
@@ -112,7 +113,7 @@ const STRATEGY_LABEL_FALLBACK = {
   "reset-aware": "Reset-Aware RR",
 };
 
-const STRATEGY_DESC_FALLBACK = {
+const STRATEGY_DESC_FALLBACK: Record<string, string> = {
   "context-relay":
     "Priority-style routing with automatic context handoffs when account rotation happens.",
   "reset-aware":
@@ -470,7 +471,7 @@ const COMBO_FORM_STAGE_META = [
     fallbackDescription: "Final verification before saving.",
     icon: "fact_check",
   },
-];
+] as const;
 
 const COMBO_TEMPLATE_FALLBACK = {
   title: "Quick templates",
@@ -575,11 +576,7 @@ function getStrategyLabel(t, strategy) {
 
 function getStrategyDescription(t, strategy) {
   const key = getStrategyMeta(strategy).descKey;
-  return getI18nOrFallback(
-    t,
-    key,
-    STRATEGY_DESC_FALLBACK[strategy] || STRATEGY_DESC_FALLBACK.priority || strategy
-  );
+  return getI18nOrFallback(t, key, STRATEGY_DESC_FALLBACK[strategy] || strategy);
 }
 
 function getStrategyBadgeClass(strategy) {
@@ -2174,7 +2171,7 @@ function ComboFormModal({
   const [manualModelError, setManualModelError] = useState("");
   const [builderComboRefName, setBuilderComboRefName] = useState("");
   const [builderError, setBuilderError] = useState("");
-  const [builderStage, setBuilderStage] = useState<string>(COMBO_BUILDER_STAGES[0]);
+  const [builderStage, setBuilderStage] = useState<ComboBuilderStage>(COMBO_BUILDER_STAGES[0]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [config, setConfig] = useState(sanitizeComboRuntimeConfig(combo?.config));
   // Validate persisted enum; ensure reset on combo change not just first mount.
