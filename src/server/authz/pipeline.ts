@@ -38,7 +38,7 @@ import {
   CLIENT_IP_HEADER,
 } from "./headers";
 import type { AuthSubject, RouteClass, RouteClassification } from "./types";
-import type { AuthOutcome, RoutePolicy } from "./context";
+import type { AuthRejection, RoutePolicy } from "./context";
 
 export interface AuthzPipelineOptions {
   enforce?: boolean;
@@ -60,7 +60,7 @@ function stampSubject(headers: Headers, subject: AuthSubject): void {
 }
 
 function rejectionResponse(
-  outcome: Extract<AuthOutcome, { allow: false }>,
+  outcome: AuthRejection,
   classification: RouteClassification,
   requestId: string
 ): NextResponse {
