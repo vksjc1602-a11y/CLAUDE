@@ -94,7 +94,12 @@ import {
 } from "@/lib/providerModels/modelDiscovery";
 import { buildProviderModelsUrl, getDiscoveryClientVersionOptions } from "./discoveryClientVersion";
 import { getAdobeModels } from "./adobeFireflyDiscovery";
-import { getSyncedAvailableModels, getCustomModels, getModelIsHidden } from "@/lib/db/models";
+import {
+  getSyncedAvailableModels,
+  getCustomModels,
+  getModelIsHidden,
+  type SyncedAvailableModel,
+} from "@/lib/db/models";
 import { isConnectionUnavailableToAuxiliaryActivity } from "@/lib/exclusiveLeaseIsolation";
 import { AUTHZ_HEADER_PEER_LOCALITY } from "@/server/authz/headers";
 import { fetchCursorAgentModels } from "@/lib/providerModels/cursorAgent";
@@ -136,6 +141,7 @@ import {
   fetchCodexDiscoveryModels,
   fetchCodexGithubCatalogModels,
   reconcileCodexDiscoveryCatalog,
+  type CodexDiscoveryModel,
 } from "./discovery/codex";
 import { getCodexDiscoveryMode } from "@/shared/services/codexDiscoveryPolicy";
 import { fetchClaudeDiscoveryModels } from "./discovery/claude";
@@ -375,7 +381,7 @@ export async function GET(
         return buildDiscoveryFallbackResponse(warnings);
       }
       const status = getSafeOutboundFetchErrorStatus(error);
-      if (status === 400 || status === 503 || status === 504) return null;
+      if (status === 503 || status === 504) return null;
       return buildDiscoveryFallbackResponse(warnings);
     };
 
@@ -1258,7 +1264,9 @@ export async function GET(
       const psd = asRecord(connection.providerSpecificData);
       const baseUrl = getProviderBaseUrl(psd) || OCI_DEFAULT_BASE_URL;
       const projectId =
-        connection.projectId || toNonEmptyString(psd.projectId) || toNonEmptyString(psd.project);
+        toNonEmptyString(connection.projectId) ||
+        toNonEmptyString(psd.projectId) ||
+        toNonEmptyString(psd.project);
 
       let response: Response;
       try {
@@ -2079,11 +2087,17 @@ export async function GET(
         getStaticModelsForProvider("codex") || []
       );
       const reconcileCodexCatalog = (
-        remoteModels: typeof cachedDiscoveryModels,
+        remoteModels: Array<SyncedAvailableModel | CodexDiscoveryModel>,
         source: "live" | "github" = "live"
       ) =>
         reconcileCodexDiscoveryCatalog(
-          remoteModels.map((model) => ({ ...model, discoverySource: source })),
+          remoteModels.map((model) => ({
+            ...model,
+            owned_by: "codex" as const,
+            apiFormat: "responses" as const,
+            supportedEndpoints: ["responses"] as ["responses"],
+            discoverySource: source,
+          })),
           staticCodexCatalog,
           codexDiscoveryMode
         );
@@ -2123,7 +2137,7 @@ export async function GET(
 
       const liveModels = await fetchCodexDiscoveryModels({
         accessToken: accessToken || null,
-        providerSpecificData: connection.providerSpecificData,
+        providerSpecificData: asRecord(connection.providerSpecificData),
         fetchImpl: (url, init) =>
           safeOutboundFetch(url, {
             ...SAFE_OUTBOUND_FETCH_PRESETS.modelsDiscovery,
