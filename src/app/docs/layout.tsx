@@ -61,7 +61,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
         },
       }}
     >
-      <DocsLayout tree={source.pageTree as Root} {...docsLayoutOptions}>
+      <DocsLayout tree={source.pageTree as unknown as Root} {...docsLayoutOptions}>
         {children}
       </DocsLayout>
     </RootProvider>

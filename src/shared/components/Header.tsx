@@ -67,7 +67,6 @@ const HEADER_DESCRIPTIONS: Partial<Record<HideableSidebarItemId | "omni-skills",
   audit: "auditDescription",
   webhooks: "webhooksDescription",
   health: "healthDescription",
-  proxy: "proxyDescription",
   changelog: "changelogDescription",
   // Protocols
   mcp: "mcpDescription",

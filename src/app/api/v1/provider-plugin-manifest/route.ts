@@ -16,7 +16,6 @@ import type {
   ProviderPluginModel,
 } from "@omniroute/open-sse/config/providerPluginManifest.ts";
 
-const SERVICE_BACKEND_EXPOSURE_REQUIRED = new Set(SERVICE_BACKEND_PLUGIN_IDS);
 const SERVICE_BACKEND_PLUGIN_ID_SET = new Set<string>(SERVICE_BACKEND_PLUGIN_IDS);
 
 function createServiceManifestTemplate(providerId: string): ProviderPluginManifestEntry | null {
@@ -95,7 +94,7 @@ function pickServiceModels(
 }
 
 async function shouldExposeServiceModels(toolName: string): Promise<boolean> {
-  if (!SERVICE_BACKEND_EXPOSURE_REQUIRED.has(toolName)) return true;
+  if (!SERVICE_BACKEND_PLUGIN_ID_SET.has(toolName)) return true;
 
   const serviceTool = isServiceBackendPluginId(toolName)
     ? (getServiceToolFromPluginId(toolName) ?? toolName)
