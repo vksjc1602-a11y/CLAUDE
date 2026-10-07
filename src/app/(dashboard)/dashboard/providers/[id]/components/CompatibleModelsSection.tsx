@@ -557,6 +557,7 @@ export default function CompatibleModelsSection({
                   key={`${providerStorageAlias}:${modelId}`}
                   modelId={modelId}
                   fullModel={fullModel}
+                  provider={providerStorageAlias}
                   alias={alias}
                   displayName={displayName}
                   source={source}
