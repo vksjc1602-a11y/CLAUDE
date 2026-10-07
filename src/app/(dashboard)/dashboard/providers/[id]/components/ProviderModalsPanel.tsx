@@ -106,7 +106,7 @@ interface ProviderModalsPanelProps {
   externalLinkError: string | null;
   externalLinkUrl: string | null;
   externalLinkCopied: string | false;
-  externalLinkCopy: () => void;
+  externalLinkCopy: (text: string, id?: string) => void | Promise<unknown>;
   // Edit connection
   showEditModal: boolean;
   setShowEditModal: (open: boolean) => void;
