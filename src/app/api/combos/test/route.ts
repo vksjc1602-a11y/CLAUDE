@@ -11,6 +11,14 @@ import {
 import { getRuntimePorts } from "@/lib/runtime/ports";
 import { requiresWebSessionCredential } from "@/shared/providers/webSessionCredentials";
 import { resolveNestedComboTargets } from "@omniroute/open-sse/services/combo.ts";
+function comboConfig(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const config: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    if (key in value) config[key] = value[key];
+  }
+  return config;
+}
 import type { ResolvedComboTarget } from "@omniroute/open-sse/services/combo/types.ts";
 import { testComboSchema } from "@/shared/validation/schemas";
 import { isValidationFailure, validateBody } from "@/shared/validation/helpers";
@@ -233,7 +241,34 @@ export async function POST(request) {
     }
 
     const allCombos = await getCombos();
-    const targets = resolveNestedComboTargets(combo, allCombos);
+    const comboNameValue = combo.name;
+    const comboModels = combo.models;
+    if (typeof comboNameValue !== "string" || !Array.isArray(comboModels)) {
+      return NextResponse.json({ error: "Combo has no models" }, { status: 400 });
+    }
+    const resolvedConfig = comboConfig(combo.config);
+    const targets = resolveNestedComboTargets(
+      {
+        name: comboNameValue,
+        models: comboModels,
+        ...(typeof combo.id === "string" ? { id: combo.id } : {}),
+        ...(typeof combo.strategy === "string" ? { strategy: combo.strategy } : {}),
+        ...(resolvedConfig ? { config: resolvedConfig } : {}),
+      },
+      allCombos.flatMap((entry) => {
+        if (typeof entry.name !== "string" || !Array.isArray(entry.models)) return [];
+        const entryConfig = comboConfig(entry.config);
+        return [
+          {
+            name: entry.name,
+            models: entry.models,
+            ...(typeof entry.id === "string" ? { id: entry.id } : {}),
+            ...(typeof entry.strategy === "string" ? { strategy: entry.strategy } : {}),
+            ...(entryConfig ? { config: entryConfig } : {}),
+          },
+        ];
+      })
+    );
 
     if (targets.length === 0) {
       return NextResponse.json({ error: "Combo has no models" }, { status: 400 });
