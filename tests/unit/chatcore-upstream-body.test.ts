@@ -14,7 +14,17 @@ process.env.DATA_DIR = testDataDir;
 
 const coreDb = await import("../../src/lib/db/core.ts");
 const { prepareUpstreamBody } = await import("../../open-sse/handlers/chatCore/upstreamBody.ts");
-const { translateRequest } = await import("../../open-sse/translator/index.ts");
+const { translateRequest: translateRequestUntyped } =
+  await import("../../open-sse/translator/index.ts");
+const translateRequest = translateRequestUntyped as (
+  sourceFormat: string,
+  targetFormat: string,
+  model: string,
+  body: Record<string, unknown>,
+  stream?: boolean,
+  credentials?: { provider?: string } | null,
+  provider?: string | null
+) => Record<string, unknown>;
 const { FORMATS } = await import("../../open-sse/translator/formats.ts");
 const { setParamFilterConfig, deleteParamFilterConfig } =
   await import("../../src/lib/db/paramFilters.ts");
@@ -693,6 +703,24 @@ test("preserves the full tool list when within the grok-cli limit", async () => 
 // the router executes its calls itself. Tools are sorted by name (#12234) before
 // namespaces are flattened, so behind a large MCP catalog (Codex with 200+ tools)
 // the fallback sat past the cap and was cut: the model never saw a search tool.
+
+function toolNames(body: { tools?: unknown }): string[] {
+  if (!Array.isArray(body.tools)) return [];
+  return body.tools.map((tool) => {
+    if (!tool || typeof tool !== "object") return "";
+    if (
+      "function" in tool &&
+      tool.function &&
+      typeof tool.function === "object" &&
+      "name" in tool.function
+    ) {
+      return typeof tool.function.name === "string" ? tool.function.name : "";
+    }
+    if ("name" in tool && typeof tool.name === "string") return tool.name;
+    return "";
+  });
+}
+
 test("keeps the router's web fallback tools when the tool list is truncated", async () => {
   const mcpTools = Array.from({ length: 200 }, (_, i) => ({
     type: "function",
@@ -710,7 +738,7 @@ test("keeps the router's web fallback tools when the tool list is truncated", as
     targetFormat: "openai",
     credentials: null,
   });
-  const names = out.tools.map((tool) => tool.function.name);
+  const names = toolNames(out);
   assert.equal(names.length, 128);
   assert.deepEqual(names.slice(-2), ["omniroute_web_fetch", "omniroute_web_search"]);
   assert.deepEqual(
@@ -747,8 +775,9 @@ test("keeps the fallback tools in flat Responses and prefixed Claude shapes", as
       targetFormat: shape.targetFormat,
       credentials: null,
     });
-    assert.equal(out.tools.length, 128, shape.targetFormat);
-    assert.deepEqual(out.tools.at(-1), tools.at(-1), shape.targetFormat);
+    assert.equal(Array.isArray(out.tools) ? out.tools.length : 0, 128, shape.targetFormat);
+    const sentTools = Array.isArray(out.tools) ? out.tools : [];
+    assert.deepEqual(sentTools.at(-1), tools.at(-1), shape.targetFormat);
   }
 });
 
@@ -768,10 +797,7 @@ test("never sends more tools than a limit smaller than the pinned fallback tools
       targetFormat: "openai",
       credentials: null,
     });
-    assert.deepEqual(
-      out.tools.map((tool) => tool.function.name),
-      ["omniroute_web_fetch"]
-    );
+    assert.deepEqual(toolNames(out), ["omniroute_web_fetch"]);
   } finally {
     clearDetectedLimits();
   }
