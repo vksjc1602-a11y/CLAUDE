@@ -10,12 +10,13 @@ const TEST_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "omniroute-12627-"))
 process.env.DATA_DIR = TEST_DATA_DIR;
 
 const catalogCache = await import("../../src/app/api/v1/models/catalogCache.ts");
+type CatalogPayload = import("../../src/app/api/v1/models/catalogCache.ts").CatalogPayload;
 
 function request() {
   return new Request("http://localhost/v1/models");
 }
 
-function payload(body: string): catalogCache.CatalogPayload {
+function payload(body: string): CatalogPayload {
   return { body, headers: { "content-type": "application/json" }, status: 200, cacheTTL: 60_000 };
 }
 
@@ -34,7 +35,7 @@ test("#12627 cold hung rebuild returns retryable 503", async () => {
   const res = await catalogCache.resolveCachedCatalogResponse(
     request(),
     { corsHeaders: {}, diagnosticHeaders: {} },
-    neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+    neverResolves as (req: Request) => Promise<CatalogPayload>
   );
   assert.equal(res.status, 503);
   assert.equal(res.headers.get("Retry-After"), "1");
@@ -56,7 +57,7 @@ test("#12627 timeout serves last-good 200 when a prior build succeeded", async (
   const second = await catalogCache.resolveCachedCatalogResponse(
     request(),
     { corsHeaders: {}, diagnosticHeaders: {} },
-    neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+    neverResolves as (req: Request) => Promise<CatalogPayload>
   );
   assert.equal(second.status, 200);
   assert.equal(await second.text(), "good");
@@ -80,12 +81,12 @@ test("rapid retry joins the orphaned build (one builder run, two 503s)", async (
   const p1 = catalogCache.resolveCachedCatalogResponse(
     request(),
     { corsHeaders: {}, diagnosticHeaders: {} },
-    neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+    neverResolves as (req: Request) => Promise<CatalogPayload>
   );
   const p2 = catalogCache.resolveCachedCatalogResponse(
     request(),
     { corsHeaders: {}, diagnosticHeaders: {} },
-    neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+    neverResolves as (req: Request) => Promise<CatalogPayload>
   );
   const [r1, r2] = await Promise.all([p1, p2]);
   assert.equal(r1.status, 503);
@@ -97,7 +98,7 @@ test("diagnostic header merges without case duplicates", async () => {
   const res = await catalogCache.resolveCachedCatalogResponse(
     request(),
     { corsHeaders: { "X-Omniroute-Catalog": "stale-value" }, diagnosticHeaders: {} },
-    neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+    neverResolves as (req: Request) => Promise<CatalogPayload>
   );
   assert.equal(res.status, 503);
   const raw = [...res.headers.entries()].filter(([k]) => k.toLowerCase() === "x-omniroute-catalog");
@@ -111,16 +112,22 @@ test("slow build converging after two timeouts serves 200 on next retry", async 
     return payload("late-good");
   };
   const first = await catalogCache.resolveCachedCatalogResponse(
-    request(), { corsHeaders: {}, diagnosticHeaders: {} }, slowBuilder
+    request(),
+    { corsHeaders: {}, diagnosticHeaders: {} },
+    slowBuilder
   );
   assert.equal(first.status, 503);
   const second = await catalogCache.resolveCachedCatalogResponse(
-    request(), { corsHeaders: {}, diagnosticHeaders: {} }, slowBuilder
+    request(),
+    { corsHeaders: {}, diagnosticHeaders: {} },
+    slowBuilder
   );
   assert.equal(second.status, 503);
   await new Promise((r) => setTimeout(r, 200));
   const third = await catalogCache.resolveCachedCatalogResponse(
-    request(), { corsHeaders: {}, diagnosticHeaders: {} }, slowBuilder
+    request(),
+    { corsHeaders: {}, diagnosticHeaders: {} },
+    slowBuilder
   );
   assert.equal(third.status, 200);
   assert.equal(await third.text(), "late-good");
@@ -130,22 +137,26 @@ test("eternally hung build is replaced, never pinned", async () => {
   process.env.CATALOG_BUILD_TIMEOUT_MS = "20";
   try {
     const r1 = await catalogCache.resolveCachedCatalogResponse(
-      request(), { corsHeaders: {}, diagnosticHeaders: {} },
-      neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+      request(),
+      { corsHeaders: {}, diagnosticHeaders: {} },
+      neverResolves as (req: Request) => Promise<CatalogPayload>
     );
     assert.equal(r1.status, 503);
     const r2 = await catalogCache.resolveCachedCatalogResponse(
-      request(), { corsHeaders: {}, diagnosticHeaders: {} },
-      neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+      request(),
+      { corsHeaders: {}, diagnosticHeaders: {} },
+      neverResolves as (req: Request) => Promise<CatalogPayload>
     );
     assert.equal(r2.status, 503);
     const r3 = await catalogCache.resolveCachedCatalogResponse(
-      request(), { corsHeaders: {}, diagnosticHeaders: {} },
-      neverResolves as (req: Request) => Promise<catalogCache.CatalogPayload>
+      request(),
+      { corsHeaders: {}, diagnosticHeaders: {} },
+      neverResolves as (req: Request) => Promise<CatalogPayload>
     );
     assert.equal(r3.status, 503);
     const r4 = await catalogCache.resolveCachedCatalogResponse(
-      request(), { corsHeaders: {}, diagnosticHeaders: {} },
+      request(),
+      { corsHeaders: {}, diagnosticHeaders: {} },
       async () => payload("fresh")
     );
     assert.equal(catalogCache.__getCatalogBuilderRunsForTest() >= 2, true);
