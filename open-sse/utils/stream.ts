@@ -1370,9 +1370,10 @@ export function createSSEStream(options: StreamOptions = {}) {
     return true;
   };
 
-  const sseStream = new TransformStream(
-    {
-      start(controller) {
+  const sseTransformer: Transformer & {
+    cancel: (reason?: unknown) => void;
+  } = {
+    start(controller) {
         // Start idle watchdog — checks every 10s if provider has stopped sending
         if (STREAM_IDLE_TIMEOUT_MS > 0) {
           idleTimer = setInterval(() => {
@@ -3238,10 +3239,13 @@ export function createSSEStream(options: StreamOptions = {}) {
           console.log(`[STREAM] Error in flush (${model || "unknown"}):`, error.message || error);
         }
       },
-      cancel(reason) {
+      cancel() {
         clearIdleTimer();
       },
-    },
+  };
+
+  const sseStream = new TransformStream(
+    sseTransformer,
     { highWaterMark: streamBufferBytes },
     { highWaterMark: streamBufferBytes }
   );
