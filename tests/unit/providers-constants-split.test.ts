@@ -46,12 +46,13 @@
 // Unifically (gateways, #14182) adds one apikey entry — 244.
 // BeatAPI (#14875) extracts one aggregator gateway into apikey/beatapi.ts and spreads it
 // from the barrel — 245.
+// #14308 adds four apikey/regional entries (Ashna, Atria, GapGPT, Hooshyar) — 249.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const P = await import("../../src/shared/constants/providers.ts");
 
-const APIKEY_PROVIDER_COUNT = 245;
+const APIKEY_PROVIDER_COUNT = 249;
 
 test("barrel still exports every catalog + key helpers", () => {
   for (const name of [
