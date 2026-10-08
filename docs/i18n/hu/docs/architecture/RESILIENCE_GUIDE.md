@@ -203,131 +203,196 @@ A kapcsolódó mechanizmusok továbbra is elkülönülnek:
 
 ---
 
-## 3. Modellzárolás
+## 3. Modellkizárás
 
 **Hatókör:** szolgáltató + kapcsolat + modell hármasa.
 
-**A kulcs hatóköre állapotkód szerint:** a hibát jelző állapotkód határozza meg, hogy a zárolás melyik kulcsba kerül
+**Kulcshatókör állapot szerint:** a hibát jelző állapot határozza meg, hogy a kizárás melyik kulcsra íródik
 (`resolveLockoutScope()` az `open-sse/services/accountFallback/exactModelLock.ts` fájlban):
 
-- `429` / `403` / `402` — kvótára vagy jogosultságra utaló jelzés — zárolja a **kvótacsaládot**:
-  codex esetén a kapcsolat teljes `codex` / `spark` hatókörét (a kapcsolat minden
-  `gpt-5*` modelljét), más szolgáltatóknál pedig a `getQuotaScopedModelForProvider()` által meghatározott hatókört.
-- A `404` az alapmodellt zárolja (a `getModelLockKey()` leszűkíti a `not_found` esetet).
-- Minden más állapotkód — az `5xx` átviteli-/szerverhibák, valamint az OmniRoute
-  minőségellenőrzése által előállított `502` — kizárólag a **pontos**
+- `429` / `403` / `402` — kvótára vagy jogosultságra utaló jelzés — a **kvótacsaládot** zárolja:
+  codex esetén a teljes `codex` / `spark` hatókört (a kapcsolat összes `gpt-5*` modelljét),
+  más szolgáltatóknál pedig a `getQuotaScopedModelForProvider()` által meghatározottat.
+- A `404` a konkrét modellt zárolja (a `getModelLockKey()` leszűkíti a `not_found` esetet).
+- Bármely más állapot — `5xx` átviteli/szerverhibák, valamint az OmniRoute minőség-ellenőrzése által
+  előállított saját `502` állapot — kizárólag a **pontos**
   szolgáltató/kapcsolat/modell hármast zárolja. Egy modell hibás adatfolyama nem bizonyíték
   a fiók kvótahelyzetére; e szabály előtt egyetlen üres válasz a
-  `codex/gpt-5.6-luna` modellen 2–30 percre (fokozatosan növekvő időtartammal) eltávolította
+  `codex/gpt-5.6-luna` modellen 2–30 percre (egyre hosszabb időre) eltávolította
   az adott kapcsolat összes `gpt-5*` modelljét az útválasztásból,
-  miközben a kvótája érintetlen maradt.
+  miközben a kvóta érintetlen maradt.
 - A hívó explicit `scope` beállítása mindig elsőbbséget élvez (az Antigravity az `"exact"` értéket adja át).
 
 **Cél:** elkerülni egy teljes kapcsolat letiltását, amikor csak egyetlen modell nem érhető el, vagy annak kvótája korlátozott.
 
 **Példák:**
 
-- Modellenkénti kvótát alkalmazó szolgáltatók, amelyek 429-et adnak vissza
-- Helyi szolgáltatók, amelyek 404-et adnak vissza egyetlen hiányzó modell esetén
-- Szolgáltatóspecifikus mód-/modelljogosultsági hibák (pl. Grok módok)
+- Modellenkénti kvótát alkalmazó szolgáltatók, amelyek 429-es állapotot adnak vissza
+- Helyi szolgáltatók, amelyek egyetlen hiányzó modell esetén 404-es állapotot adnak vissza
+- Szolgáltatóspecifikus mód-/modelljogosultsági hibák (például Grok-módok)
 
 **Megvalósítás:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Modell-lehűlési irányítópult (v3.8.0)
+### Modell-várakoztatások irányítópultja (v3.8.0)
 
-Felhasználói felület: Beállítások → Modell-lehűlések (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Felület: Beállítások → Modell-várakoztatások (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Az aktív zárolásokat a következő adatokkal sorolja fel: szolgáltató, kapcsolat, modell, ok, expiresAt. Az üzemeltetők a kártyáról manuálisan újra engedélyezhetnek egy modellt.
+Az aktív kizárásokat sorolja fel a következőkkel: szolgáltató, kapcsolat, modell, ok, expiresAt. Az üzemeltetők manuálisan újra engedélyezhetnek egy modellt a kártyáról.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — aktív zárolások listázása
+- `GET /api/resilience/model-cooldowns` — aktív kizárások listázása
 - `DELETE /api/resilience/model-cooldowns` — manuális újraengedélyezés. Törzs: `{provider, connection, model}`. Hitelesítés: felügyeleti.
 
-### Zárolási beállítások felhasználói felülete + siker-alapú lecsengéses helyreállítás (v3.8.23)
+### Várakoztatás-kezelő
 
-A modellzárolás a mindig bekapcsolt, beégetett működésből teljesen konfigurálható,
-külön bekapcsolható funkcióvá vált, saját beállításkártyával és öngyógyító helyreállítási útvonallal.
+Felület: Megfigyelés → Várakoztatás-kezelő (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Beállításkártya:** Beállítások → Modellzárolás
+Egyetlen oldal minden olyan kapcsolathoz, amely átmeneti okból kikerült az útválasztásból, így nem kell
+minden szolgáltatói oldalt külön megnyitni. Felsorolja a kapcsolatok várakoztatásait, a modellkizárásokat és a végállapotokat,
+valamint törli ezeket kapcsolatonként, egy kijelöléshez vagy egy szolgáltató összes kapcsolatánál,
+továbbá szerkeszti a leggyakrabban finomhangolt várakoztatási szabályokat: a `streamStallCooldown.enabled` beállítást, illetve az OAuth-/API-kulcsos
+`connectionCooldown` alap-várakoztatását és maximális visszalépési lépéseit (mentésük a
+`PATCH /api/resilience` végponton keresztül történik). A végállapotok (`banned`, `expired`, `credits_exhausted`)
+megjelennek a listán, de itt soha nem törlődnek.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, hitelesítés: felügyeleti):
+
+- `GET /api/resilience/cooldowns[?provider=]` — kapcsolatok állapottal, hátralévő várakoztatási idővel,
+  visszalépési szinttel, utolsó hibatípussal és modellkizárásokkal (hitelesítő adatok nélkül)
+- `POST /api/resilience/cooldowns` — törzs: `{connectionIds: string[]}` vagy
+  `{all: true, provider?}`; visszatérési érték: `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Kizárási beállítások felülete + siker alapján csökkenő helyreállítás (v3.8.23)
+
+A modellkizárás a mindig bekapcsolt, fixen kódolt működés helyett teljesen konfigurálható,
+külön engedélyezhető funkcióvá vált, saját beállításkártyával és öngyógyító helyreállítási útvonallal.
+
+**Beállításkártya:** Beállítások → Modellkizárás
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Ez **különbözik** a fenti, csak olvasható `ModelCooldownsCard` kártyától (amely csak
-_felsorolja_ az aktív zárolásokat) — az új kártya _a paramétereket konfigurálja_. Az alapértelmezett értékek a
-`DEFAULT_MODEL_LOCKOUT_SETTINGS` konstansban találhatók
+Ez **különbözik** a fenti, csak olvasható `ModelCooldownsCard` kártyától (amely csupán
+_felsorolja_ az aktív kizárásokat) — az új kártya _a paramétereket konfigurálja_. Az alapértékek
+a `DEFAULT_MODEL_LOCKOUT_SETTINGS` értékben találhatók
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Beállítás               | Alapértelmezett                  | Jelentés                                                                  |
+| Beállítás               | Alapérték                        | Jelentés                                                                  |
 | ----------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Főkapcsoló — a modellzárolás **alapértelmezés szerint ki van kapcsolva**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Modellhatókörű hibának számító upstream állapotkódok.                     |
-| `baseCooldownMs`        | `120_000` (120 mp)               | Az első hiba kezdeti zárolási időtartama.                                 |
-| `maxCooldownMs`         | `1_800_000` (30 perc)            | A fokozatosan növelt lehűlési idő felső korlátja.                         |
+| `enabled`               | `false`                          | Főkapcsoló — a modellkizárás **alapértelmezés szerint ki van kapcsolva**. |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Modellhatókörű hibának számító felsőbb rétegbeli állapotok.               |
+| `baseCooldownMs`        | `120_000` (120 s)                | Az első hiba kezdeti kizárási időtartama.                                 |
+| `maxCooldownMs`         | `1_800_000` (30 perc)            | A megnövelt várakoztatási idő felső korlátja.                             |
 | `maxBackoffSteps`       | `10`                             | Az exponenciális visszalépés növelési lépéseinek maximális száma.         |
-| `useExponentialBackoff` | `true`                           | Ismétlődő hibák esetén exponenciálisan növekedjen-e a lehűlési idő.       |
+| `useExponentialBackoff` | `true`                           | Meghosszabbítsák-e az ismétlődő hibák exponenciálisan a várakoztatást.    |
 
-A beállítások a szokásos beállítástáron keresztül maradnak fenn, és az ellenálló képességi
-beállítások sémája alapján lesznek ellenőrizve; a kártya korlátozza a `baseCooldownMs`/`maxCooldownMs`
-értékeket (`maxCooldownMs ≥ baseCooldownMs`), valamint a `maxBackoffSteps` értékét.
+A beállításokat a szokásos beállítástároló őrzi meg, érvényesítésük pedig a
+rezilienciabeállítások sémáján keresztül történik; a kártya korlátok közé szorítja a `baseCooldownMs`/`maxCooldownMs`
+értékét (`maxCooldownMs ≥ baseCooldownMs`), valamint a `maxBackoffSteps` értékét.
 
-**Siker-alapú lecsengéses helyreállítás:** a helyreállítás **nem** kizárólag az időzítő lejáratán alapul. Egy megfelelő
-válasz fokozatosan csökkenti a modell hibaszámát, így az időablak közben helyreállt modell
-növekvő büntetése megszűnik (és a zárolása törlődik), még mielőtt az időzítője lejárna. Sikeres
-kombinált cél esetén az `open-sse/services/combo.ts` meghívja a `decayModelFailureCount()`
+**Siker alapján csökkenő helyreállítás:** a helyreállítás **nem** pusztán az időzítő lejártán alapul. Egy hibamentes
+válasz fokozatosan csökkenti a modell hibaszámát, így az időablak közben helyreálló modell
+állapota nem romlik tovább, és a kizárása az időzítő lejárta előtt megszűnik. Egy kombinált cél sikeres
+elérésekor az `open-sse/services/combo.ts` meghívja a `decayModelFailureCount()`
 függvényt (`open-sse/services/accountFallback.ts`), amely **megfelezi** a tárolt
-`failureCount` értékét (`Math.floor(failureCount / 2)`); amikor az eléri a `0` értéket, a zárolási
-bejegyzés teljes egészében törlődik. A párja, a `recordModelLockoutFailure()`,
-a növelési időablakon belüli hibák esetén növeli a számlálót (és meghosszabbítja a lehűlési időt).
-Ez a siker-alapú lecsengés az egyszerű időzítőlejáraton felül működik —
+`failureCount` értékét (`Math.floor(failureCount / 2)`); amikor az eléri a `0` értéket, a kizárási
+bejegyzés teljes egészében törlődik. A párjaként működő `recordModelLockoutFailure()`
+növeli a számlálót (és meghosszabbítja a várakoztatást), ha a hibák a
+növelési időablakon belül következnek be. Ez a siker alapján történő csökkentés kiegészíti az egyszerű időzítő-lejáratot —
 bármelyik útvonal újra engedélyezheti a modellt.
 
-**Állapot:** a zárolások **memóriában** vannak tárolva (folyamatonkénti `Map` példányokban,
-`ModelLockoutEntry` bejegyzésekkel, amelyek kulcsa `provider:connectionId:model`, míg a pontos hatókörű zárolásoké
-`provider:connectionId:exact:model`), és nem kerülnek mentésre
+**Állapot:** a kizárások tárolása **memóriában** történik (folyamatonkénti `Map` példányokban,
+amelyek a `ModelLockoutEntry` értékeket `provider:connectionId:model`, a pontos hatókörű zárolásokat pedig
+`provider:connectionId:exact:model` alapján kulcsolják), és nem kerülnek mentésre
 az adatbázisba — újraindításkor elvesznek. A _beállítások_ megmaradnak; az aktív
-zárolási _állapot_ átmeneti.
+kizárási _állapot_ átmeneti.
 
 ---
 
-## 4. Kvótamegosztási párhuzamosság-szabályozás (v3.8.36)
+## 4. Kvótamegosztásos párhuzamosság-szabályozás (v3.8.36)
 
-Az előfizetéses fiókok (GLM, MiniMax stb.) gyakran csak ~1–3 párhuzamos
-kérést fogadnak el; ennek túllépése 429-es válaszokat és várakozási időszakokat vált ki. Ez különösen súlyos a
-**kvótamegosztási** (`qtSd/…`) kombinációknál, ahol több API-kulcs osztozik egyetlen felsőbb szintű
+Az előfizetéses fiókok (GLM, MiniMax stb.) gyakran csak ~1–3 egyidejű
+kérést fogadnak el; ennek túllépése 429-es hibákat és várakozási időket vált ki. Ez különösen súlyos
+a **kvótamegosztásos** (`qtSd/…`) kombinációknál, ahol több API-kulcs osztozik egyetlen upstream
 fiókon. Három réteg akadályozza meg a megosztott fiók túlterhelését.
 
 ### Kapcsolatonkénti párhuzamossági korlát (`max_concurrent`)
 
 Minden szolgáltatói kapcsolat megadhat egy `max_concurrent` felső korlátot
-(`provider_connections.max_concurrent`, amely a kapcsolat párbeszédablakában / API-n / adatbázisban állítható be).
-Korlátlan működéshez hagyja üresen. Ez az egyetlen beállítás vezérli az alábbi szerializálási
-réteget — állítsa a fiók tényleges párhuzamossági értékére (pl. GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`, amely a kapcsolat párbeszédpaneljén / API-n / adatbázisban állítható be).
+Korlát nélküli működéshez hagyja üresen. Ez az egyetlen beállítás vezérli az alábbi
+sorosítási réteget — állítsa be a fiók tényleges párhuzamosságára (pl. GLM ~1, MiniMax ~2).
 
-### Kvótamegosztási kérések szerializálása
+### Modellenkénti párhuzamossági korlátok (`modelConcurrency`)
 
-Amikor egy kvótamegosztási továbbítás olyan kapcsolatot céloz meg, amely pozitív
-`max_concurrent` értéket ad meg, az adott **fiókhoz** tartozó párhuzamos kérések egy
-kapcsolatonkénti szemaforon keresztül szerializálódnak (`qsconn:<connectionId>` kulcs): a többletkérések **a
-sorban várakoznak**, ahelyett, hogy túlterhelnék a fiókot. A működés **fail-open** jellegű — telített
-sor vagy időtúllépés esetén a kérés foglalás nélkül folytatódik, ahelyett, hogy egy továbbítható
-kérést valaha is elutasítana. A funkció a **Beállítások → Hibatűrés → Kvótamegosztás kapcsolatonkénti
-párhuzamossága** alatt kapcsolható (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, alapértelmezetten
-bekapcsolva). `max_concurrent` korlát nélkül a működés változatlan marad.
+Egy kapcsolat emellett pontos, modellenkénti párhuzamossági felső korlátokat is megadhat
+a `rateLimitOverrides` leképezésében:
 
-> Maga a kvótamegosztási útválasztási kapu (`selectQuotaShareTarget`, DRR + P2C) is
-> fail-open módon működik, és csak _alacsonyabb prioritásúvá teszi_ a korlátját elérő kapcsolatot — egyetlen
-> kapcsolatból álló készlet esetén nem képes szigorú korlátozást alkalmazni, így valójában ez a szemafor
-> tartja kordában a túlterhelést.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### A kombinációk várakozási időszakát figyelembe vevő újrapróbálkozás
+Állítsa be a kapcsolat párbeszédpaneljén (**Sebességkorlát-felülbírálások → Modellenkénti
+párhuzamossági korlátok**, soronként egy `model=cap` érték), vagy a
+`PATCH /api/providers/[id]` végponton keresztül, ugyanilyen JSON-struktúrával. A kulcsok szemantikája:
 
-Minden kombinációs stratégia esetén (ha engedélyezve van) az a kérés, amely egy RÖVID,
-átmeneti várakozási időszak miatt 429-es választ eredményezne, kivárja ezt az időszakot, majd
-újra továbbításra kerül a 429-es válasz visszaadása helyett — ez lefedi a Gemini-osztályú TPM/RPM-ablakokat
-(~60 másodperces retry-after) a többmodelles kombinációknál, például amikor egy kétmodellű kombináció
-mindkét célpontja eléri a modellenkénti sebességkorlátot. A működést a `comboCooldownWait`
-(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) korlátozza a **Beállítások → Hibatűrés**
-alatt. Soha nem várakozik `quota_exhausted` (éjfélig zárolva), illetve hitelesítési vagy
-nem található okok esetén.
+- **Kapcsolatszintű és modellspecifikus korlát:** a `maxConcurrent` továbbra is a megosztott,
+  kapcsolatszintű felső korlát. Ha mindkettő érvényes, mindkét zár
+  atomi módon kerül lefoglalásra ugyanabban az összetett zárban
+  (`global → provider → account → model`); a tényleges viselkedést a
+  szigorúbb alkalmazható korlát határozza meg.
+- **Pontos modellkulcs-egyezés:** a kulcs a végrehajtónak az útválasztás feloldása után átadott
+  modellkarakterlánc — általában a puszta upstream modellazonosító
+  (`glm-5`), nem pedig egy kliensoldali `provider/model` álnév (a `zai/glm-5` nem
+  egyezik a `glm-5` értékkel). Az értékek pozitív egész számként megadott, egyidejű kérésekre vonatkozó felső korlátok.
+- **Helyi várakozási sor, automatikus felderítés nélkül:** a többletkérések helyben várakoznak a
+  meglévő sor- és időtúllépési szemantikával (típusos `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` befogadási hibák). Az OmniRoute nem deríti fel és nem
+  következteti ki az upstream szabályzatot — pontosan az üzemeltető által
+  konfigurált felső korlátokat kényszeríti ki. Egy telített modellzár soha nem tiltja le a szolgáltatót, és soha nem
+  hoz létre tartós modellzárolást; az upstream 429/várakozási idő/tartalék útvonal viselkedése
+  továbbra is végső hibakezelési biztosítékként szolgál.
+- **Kapcsolatonkénti, folyamatonkénti hatókör:** a korlátok adatbázis-kapcsolatonként érvényesek,
+  és a memóriában vannak tárolva, ezért két, ugyanazt az upstream API-kulcsot használó kapcsolat
+  nem hangolja össze egymással a működését.
+- **A konfigurálatlan állapot nem változtat a működésen:** a leképezés kihagyása (vagy az
+  irányítópult mezőjének üresen hagyása) nem ad hozzá modellzárat. Példakonfiguráció
+  bármilyen általános szolgáltatói korlát feltételezése nélkül:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Kvótamegosztásos kérések sorosítása
+
+Amikor egy kvótamegosztásos továbbítás olyan kapcsolatot céloz, amely pozitív
+`max_concurrent` értéket ad meg, az adott **fiókhoz** intézett egyidejű kéréseket egy
+kapcsolatonkénti szemafor (kulcs: `qsconn:<connectionId>`) sorosítja: a többletkérések **a
+várakozási sorban maradnak**, ahelyett hogy elárasztanák a fiókot. A működés **hiba esetén nyitott** — egy telített
+sor vagy időtúllépés esetén a kérés férőhely nélkül folytatódik, ahelyett hogy valaha is elutasítana egy továbbítható
+kérést. A funkció a **Beállítások → Ellenálló képesség → Kvótamegosztás kapcsolatonkénti
+párhuzamossága** beállítással kapcsolható át (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, alapértelmezés szerint
+bekapcsolva). `max_concurrent` korlát nélkül a viselkedés változatlan.
+
+> Maga a kvótamegosztásos útválasztási zár (`selectQuotaShareTarget`, DRR + P2C) is
+> hiba esetén nyitott, és csak _alacsonyabb prioritásúvá teszi_ a korlátját elérő kapcsolatot — egy
+> egykapcsolatos készletben nem tud szigorú korlátot érvényesíteni, ezért ténylegesen ez a szemafor
+> tartja kordában az elárasztást.
+
+### A kombináció várakozási idejét figyelembe vevő újrapróbálkozás
+
+Minden kombinációs stratégiánál (ha engedélyezve van) az a kérés, amely egy RÖVID,
+átmeneti várakozási idő miatt végleges 429-es hibát eredményezne, kivárja ezt az időt, majd a
+429-es hiba visszaadása helyett újra továbbításra kerül — ez lefedi a Gemini-osztályú TPM/RPM-ablakokat
+(~60 másodperces újrapróbálkozási idő) a többmodelles kombinációknál, például amikor egy kétmodellű
+kombináció mindkét célpontja modellenkénti sebességkorlátba ütközik. A működést a
+**Beállítások → Ellenálló képesség** alatt található `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) korlátozza. Soha nem várakozik `quota_exhausted`
+(éjfélig zárolva), illetve hitelesítési/nem található okok esetén.
 
 ---
 

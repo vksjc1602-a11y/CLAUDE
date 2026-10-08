@@ -276,29 +276,30 @@ aufgelösten Werte werden an die vorhandenen Eingaben `config.modePack` / `confi
 
 ## Alle Routing-Strategien
 
-Die Combo-Engine von OmniRoute unterstützt **19 Routing-Strategien** (deklariert in `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Die Auto-Combo-Engine selbst wird über die Strategie `auto` bereitgestellt; die anderen sind für persistierte Combos verfügbar.
+Die Combo-Engine von OmniRoute unterstützt **20 Routing-Strategien** (deklariert in `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Die Auto-Combo-Engine selbst wird über die Strategie `auto` bereitgestellt; die anderen Strategien sind für persistierte Combos verfügbar.
 
 | Strategie           | Beschreibung                                                                                                                                                                                                                               |
 | :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `priority`          | Geordnete Liste mit dem ersten Ziel und expliziter Priorität                                                                                                                                                                               |
-| `weighted`          | Gewichtete Zufallsauswahl anhand des Gewichts pro Ziel                                                                                                                                                                                     |
-| `round-robin`       | Ziele der Reihe nach durchlaufen (gebündelt; siehe unten)                                                                                                                                                                                  |
+| `priority`          | Geordnete Liste mit einem ersten Ziel und expliziter Priorität                                                                                                                                                                             |
+| `weighted`          | Gewichtete Zufallsauswahl anhand der Gewichtung pro Ziel                                                                                                                                                                                   |
+| `round-robin`       | Ziele der Reihe nach durchlaufen (stapelweise; siehe unten)                                                                                                                                                                                |
 | `context-relay`     | Kontext zwischen Zielen weiterreichen (lange Unterhaltungen)                                                                                                                                                                               |
 | `fill-first`        | Kontingent jedes Ziels ausschöpfen, bevor zum nächsten gewechselt wird                                                                                                                                                                     |
 | `p2c`               | Zufällige Lastverteilung nach dem Power-of-2-Choices-Prinzip                                                                                                                                                                               |
 | `random`            | Gleichverteilte Zufallsauswahl                                                                                                                                                                                                             |
-| `least-used`        | Ziel mit der aktuell geringsten Last auswählen                                                                                                                                                                                             |
-| `cost-optimized`    | Kosten pro Anfrage anhand der Katalogpreise minimieren                                                                                                                                                                                     |
-| `reset-aware` ⭐    | Nach dem Zeitpunkt der Kontingentzurücksetzung priorisieren — kurze Rücksetzungsfenster werden höher eingestuft                                                                                                                            |
+| `least-used`        | Ziel mit der aktuell geringsten Auslastung auswählen                                                                                                                                                                                       |
+| `cost-optimized`    | Kosten pro Anfrage gemäß Katalogpreisen minimieren                                                                                                                                                                                         |
+| `reset-aware` ⭐    | Nach Zeitpunkt der Kontingent-Zurücksetzung priorisieren — kurze Zurücksetzungsintervalle werden höher eingestuft                                                                                                                          |
 | `reset-window`      | Ziele bevorzugen, deren Kontingentfenster am frühesten zurückgesetzt wird                                                                                                                                                                  |
 | `headroom`          | Ziel mit dem größten verbleibenden Kontingentspielraum auswählen                                                                                                                                                                           |
+| `quota-weighted`    | Ausgeschöpfte Konten überspringen und dann proportional zum verbleibenden Kontingent, geteilt durch die laufende Last, aus den übrigen auswählen; bestehende Unterhaltungen bleiben fest zugeordnet                                        |
 | `strict-random`     | Zufallsauswahl ohne Deduplizierung von Wiederholungen                                                                                                                                                                                      |
 | `auto`              | Auto-Combo-Bewertung (16 Faktoren) verwenden — **empfohlen**                                                                                                                                                                               |
-| `lkgp`              | Zuletzt bekannter funktionierender Pfad (bleibt beim letzten erfolgreichen Anbieter und greift anschließend auf Regeln zurück)                                                                                                             |
-| `context-optimized` | Ziel mit der besten Eignung für die aktuelle Kontextgröße auswählen                                                                                                                                                                        |
+| `lkgp`              | Last-Known-Good Path (behält den zuletzt erfolgreichen Anbieter bei und greift anschließend auf Regeln zurück)                                                                                                                             |
+| `context-optimized` | Ziel auswählen, das am besten zur aktuellen Kontextgröße passt                                                                                                                                                                             |
 | `cache-optimized`   | Ziele nach Prompt-Cache-Affinität neu anordnen — die Verbindung, die den zwischengespeicherten Präfix dieser Anfrage am wahrscheinlichsten bereits enthält, wird zuerst versucht (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
 | `fusion` 🧬         | Anfragen parallel an eine Gruppe von Modellen senden und anschließend über ein Bewertungsmodell zu einer Antwort zusammenführen (siehe unten)                                                                                              |
-| `pipeline`          | Ziele nacheinander ausführen, wobei die Ausgabe jedes Schritts als Eingabe an den nächsten Schritt weitergegeben wird; nur die endgültige Antwort wird zurückgegeben (#6396)                                                               |
+| `pipeline`          | Ziele nacheinander ausführen und die Ausgabe jedes Schritts als Eingabe an den nächsten Schritt weitergeben; nur die endgültige Antwort wird zurückgegeben (#6396)                                                                         |
 
 ⭐ = Neu in v3.8.0 · 🧬 = Neu in v3.8.36
 
@@ -307,29 +308,22 @@ Die Combo-Engine von OmniRoute unterstützt **19 Routing-Strategien** (deklarier
 `weighted` ist eine **proportionale Zufallsauswahl pro Anfrage**
 (`open-sse/services/combo/targetSorters.ts` → `selectWeightedTarget`) und kein Ausgleichsmechanismus:
 
-- Bei jeder Anfrage wird **ein** Schritt mit der Wahrscheinlichkeit `weight / totalWeight` ausgewählt; die übrigen Schritte
-  werden für diese Anfrage als Fallback-Kette nach absteigendem Gewicht angeordnet.
-- Ein Schritt, dessen Gewicht `0` ist (oder fehlt), wird **niemals ausgewählt**, solange ein anderer Schritt ein
-  Gewicht > 0 hat — er kann nur als Fallback dienen, nachdem der ausgewählte Schritt fehlgeschlagen ist. Nur wenn **alle**
-  Gewichte 0 sind, wird die Auswahl gleichverteilt.
-- Schritte, deren Ziele sämtlich nicht verfügbar sind — Provider-Circuit-Breaker `OPEN`, Verbindungs-
-  Cooldown, Modellsperre — werden vor der Auswahl entfernt
-  (`open-sse/services/combo/targetResolution.ts`), sodass ein einzelner funktionsfähiger Schritt vorübergehend
-  jede Anfrage erhalten kann.
-- `stickyWeightedLimit` (Combo-Konfiguration, Standardwert `1` = deaktiviert) behält den ausgewählten Schritt für entsprechend viele
-  aufeinanderfolgende erfolgreiche Ausführungen bei, bevor eine neue Auswahl erfolgt.
+- Bei jeder Anfrage wird **ein** Schritt mit der Wahrscheinlichkeit `weight / totalWeight` ausgewählt; die verbleibenden Schritte werden für diese Anfrage als Fallback-Kette nach absteigender Gewichtung sortiert.
+- Ein Schritt mit der Gewichtung `0` (oder ohne Gewichtung) wird **niemals ausgewählt**, solange ein anderer Schritt eine Gewichtung > 0 hat — er kann nur als Fallback dienen, nachdem der ausgewählte Schritt fehlgeschlagen ist. Nur wenn **alle** Gewichtungen 0 sind, erfolgt die Auswahl gleichverteilt.
+- Schritte, deren Ziele sämtlich nicht verfügbar sind — Provider-Circuit-Breaker `OPEN`, Verbindungs-Cooldown, Modellsperre — werden vor der Auswahl entfernt (`open-sse/services/combo/targetResolution.ts`), sodass ein einzelner funktionsfähiger Schritt vorübergehend jede Anfrage erhalten kann.
+- `stickyWeightedLimit` (Combo-Konfiguration, Standardwert `1` = aus) behält den ausgewählten Schritt für diese Anzahl aufeinanderfolgender erfolgreicher Ausführungen bei, bevor erneut ausgewählt wird.
 
-Verwenden Sie für eine strikte Rotation `round-robin`; gleiche Gewichtungen bei `weighted` führen zu einem statistischen — nicht
-strikten — Ausgleich.
+Verwenden Sie für eine strikte Rotation `round-robin`; gleiche Gewichtungen bei `weighted` sorgen für eine statistische — nicht
+strikte — Verteilung.
 
 ### Agentischer Pipeline-Modus
 
 Eine zweistufige `pipeline`-Kombination kann mit
 `config.agenticOrchestration.enabled` das Planner/Executor-Routing aktivieren. Das erste Ziel übernimmt die Planung und die endgültigen Antworten;
-das zweite Ziel erzeugt clientnative Tool-Aufrufe. OmniRoute erkennt anhand des Anfrageprotokolls
-Fortsetzungen mit Tool-Ergebnissen, fragt den Planner, ob eine weitere Tool-Runde
-erforderlich ist, und macht dynamisch entweder den Executor oder den Planner zum abschließenden,
-clientseitig sichtbaren Schritt.
+das zweite Ziel gibt clientnative Tool-Aufrufe aus. OmniRoute erkennt Fortsetzungen mit Tool-Ergebnissen
+anhand des Anfrageprotokolls, fragt den Planner, ob eine weitere Tool-Runde erforderlich ist,
+und legt dynamisch entweder den Executor oder den Planner als letzten, dem Client bereitgestellten
+Schritt fest.
 
 ```json
 {
@@ -341,34 +335,34 @@ clientseitig sichtbaren Schritt.
 }
 ```
 
-Der Executor kann in einer Antwort mehrere unabhängige Aufrufe erzeugen. Abhängige Aufrufe werden
-in späteren clientseitigen Runden mit Tool-Ergebnissen verarbeitet, wobei der Planner jedes Ergebnis überprüft.
-`maxToolRounds` hat standardmäßig den Wert `8` und akzeptiert `1`–`32`; sobald der Grenzwert erreicht ist, muss der Planner
+Der Executor kann in einer Antwort mehrere unabhängige Aufrufe ausgeben. Abhängige Aufrufe werden
+in späteren Client-Runden mit Tool-Ergebnissen verarbeitet, wobei der Planner jedes Ergebnis prüft.
+`maxToolRounds` verwendet standardmäßig `8` und akzeptiert `1`–`32`; sobald der Grenzwert erreicht ist, muss der Planner
 die bestmögliche endgültige Antwort erzeugen. Interne Entscheidungen des Planners werden gepuffert, während
-die ausgewählte clientseitig sichtbare Antwort die ursprüngliche Streaming-Präferenz beibehält.
+die ausgewählte, dem Client bereitgestellte Antwort die ursprüngliche Streaming-Präferenz beibehält.
 
-### Persistente Stapel- und Kontoerweiterung bei `round-robin`
+### Sticky-Batches und Kontoerweiterung bei `round-robin`
 
-Round-Robin erfolgt stapelweise, nicht mit einer Anfrage pro Schritt:
+Round-Robin erfolgt batchweise, nicht mit einer Anfrage pro Schritt:
 
 - `stickyRoundRobinLimit` (zuerst Kombinationskonfiguration, dann `comboStickyRoundRobinLimit`, dann
   `settings.stickyRoundRobinLimit`, Standardwert **3**) behält dasselbe Ziel für entsprechend viele
-  aufeinanderfolgende Erfolge bei, bevor rotiert wird. Setzen Sie die Überschreibung der Kombination für eine Rotation
-  nach jeder Anfrage auf `1`. Der Kombinationseditor zeigt den effektiven Wert und die Ebene an, von der er stammt.
+  aufeinanderfolgende erfolgreiche Anfragen bei, bevor rotiert wird. Setzen Sie die Überschreibung der Kombination für eine Rotation nach jeder Anfrage
+  auf `1`. Der Kombinationseditor zeigt den effektiven Wert und die Ebene an, aus der er stammt.
 - `connectionAwareExpansion` (zuerst Kombinationskonfiguration, dann Einstellungen, Standardwert **false**) erweitert
-  jeden Schritt auf Anbieterebene vor der Rotation zu Zielen pro Konto. Strategien der Gruppe B
-  (Priorität, gewichtet, Round-Robin, zufällig, p2c, am wenigsten verwendet, kostenoptimiert, lkgp,
-  zuerst auffüllen, strikt zufällig, kontextoptimiert, Cache-optimiert, Kontextweiterleitung, Fusion,
-  Pipeline) behalten eine Ansicht auf Anbieterebene bei, bis diese Option aktiviert wird. Der Kombinationseditor bietet
-  Vererben / Ein / Aus; Vererben verwendet den globalen Standardwert (Aus).
-- Das Routing nach Prompt-Cache-Lokalität (`promptCacheAffinityEnabled`, Standardwert **true**) ordnet
+  jeden Schritt auf Anbieterebene vor der Rotation in Ziele für einzelne Konten. Strategien der Gruppe B
+  (priority, weighted, round-robin, random, p2c, least-used, cost-optimized, lkgp,
+  fill-first, strict-random, context-optimized, cache-optimized, context-relay, fusion,
+  pipeline) behalten eine Ansicht auf Anbieterebene bei, bis diese Option aktiviert wird. Der Kombinationseditor bietet
+  die Optionen „Vererben“ / „Ein“ / „Aus“; „Vererben“ verwendet den globalen Standardwert („Aus“).
+- Das Routing zur Wahrung der Prompt-Cache-Lokalität (`promptCacheAffinityEnabled`, Standardwert **true**) ordnet
   fest zugeordnete Verbindungen neu an, sodass übereinstimmende Cache-Schlüssel bei einem Konto verbleiben. Es hat Vorrang vor
-  Round-Robin- und gewichteter Rotation über fest zugeordnete Schritte pro Konto hinweg. Deaktivieren Sie es unter
+  der Round-Robin- und gewichteten Rotation über fest zugeordnete Schritte für einzelne Konten hinweg. Deaktivieren Sie es unter
   Einstellungen → Kombinationsstandardwerte, wenn Sie eine strikte Rotation benötigen. Es gibt keine Überschreibung pro Kombination.
 
-Für die Rotation über mehrere Konten bei einem Modell sollten Sie **einen Schritt mit dynamischer Kontoauswahl** (leere
-`connectionId`, gesamter Pool) mit einem Persistenzgrenzwert von `1` verwenden, nicht drei fest zugeordnete `connectionId`s.
-Fest zugeordnete Schritte in Verbindung mit Affinität konzentrieren sich auf dasselbe Konto, selbst wenn der Round-Robin-Zähler
+Bevorzugen Sie für die Rotation über mehrere Konten bei einem Modell **einen Schritt mit dynamischem Konto** (leere
+`connectionId`, gesamter Pool) mit dem Sticky-Grenzwert `1` anstelle von drei fest zugeordneten `connectionId`s.
+Fest zugeordnete Schritte mit Affinität werden demselben Konto zugewiesen, selbst wenn der RR-Zähler
 weiterläuft.
 
 ## Fusionsstrategie
@@ -804,15 +798,15 @@ Diese Smoke-Tests prüfen den echten Übertragungspfad (Combo → Anbieter → V
 
 ## Dateien
 
-| Datei                                                     | Zweck                                                                                                        |
-| :-------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
-| `open-sse/services/autoCombo/scoring.ts`                  | Bewertungsfunktion mit 16 Faktoren, `DEFAULT_WEIGHTS`, Pool-Normierung                                       |
-| `open-sse/services/autoCombo/taskFitness.ts`              | Nachschlagetabelle für Modell-×-Aufgaben-Eignung                                                             |
-| `open-sse/services/autoCombo/engine.ts`                   | Auswahllogik, Bandit, Budgetobergrenze                                                                       |
-| `open-sse/services/autoCombo/selfHealing.ts`              | Ausschluss, Prüfungen, Vorfallmodus                                                                          |
-| `open-sse/services/autoCombo/modePacks.ts`                | 6 Gewichtungsprofile (ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode) |
-| `open-sse/services/autoCombo/autoPrefix.ts`               | Parser für das Präfix `auto/` + 6 Varianten                                                                  |
-| `open-sse/services/autoCombo/virtualFactory.ts`           | Erstellt eine speicherinterne `AutoComboConfig` aus aktiven Verbindungen                                     |
-| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | Test-Hook zum Mocken der Provider-Registry                                                                   |
-| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (19 Strategien)                                                                    |
-| `src/sse/handlers/chat.ts`                                | Integration: Kurzschluss für Auto-Präfixe                                                                    |
+| Datei                                                     | Zweck                                                                                                                              |
+| :-------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| `open-sse/services/autoCombo/scoring.ts`                  | Bewertungsfunktion mit 16 Faktoren, `DEFAULT_WEIGHTS`, Pool-Norm                                                                   |
+| `open-sse/services/autoCombo/taskFitness.ts`              | Nachschlagetabelle für Modell-×-Aufgaben-Eignung                                                                                   |
+| `open-sse/services/autoCombo/engine.ts`                   | Auswahllogik, Bandit, Budgetobergrenze                                                                                             |
+| `open-sse/services/autoCombo/selfHealing.ts`              | Ausschluss, Tests, Vorfallmodus                                                                                                    |
+| `open-sse/services/autoCombo/modePacks.ts`                | 6 Gewichtungsprofile (schnelle Auslieferung, Kostensparer, Qualität zuerst, offlinefreundlich, Zuverlässigkeit zuerst, Chaosmodus) |
+| `open-sse/services/autoCombo/autoPrefix.ts`               | Parser für das Präfix `auto/` + 6 Varianten                                                                                        |
+| `open-sse/services/autoCombo/virtualFactory.ts`           | Erstellt eine speicherinterne `AutoComboConfig` aus aktiven Verbindungen                                                           |
+| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | Test-Hook zum Mocking der Provider-Registry                                                                                        |
+| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (20 Strategien)                                                                                          |
+| `src/sse/handlers/chat.ts`                                | Integration: Kurzschluss für Auto-Präfixe                                                                                          |

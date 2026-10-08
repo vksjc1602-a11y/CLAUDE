@@ -282,60 +282,61 @@ nustatytos reikšmės perduodamos esamoms variklio `config.modePack` / `config.b
 
 ## Visos maršruto parinkimo strategijos
 
-„OmniRoute“ kombinacijų variklis palaiko **19 maršruto parinkimo strategijų** (deklaruotų `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Pats „Auto Combo“ variklis pasiekiamas naudojant strategiją `auto`; kitos strategijos prieinamos išsaugotoms kombinacijoms.
+„OmniRoute“ kombinacijų variklis palaiko **20 maršruto parinkimo strategijų** (jos deklaruotos `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Pats „Auto Combo“ variklis pasiekiamas naudojant strategiją `auto`, o kitos strategijos gali būti naudojamos išsaugotoms kombinacijoms.
 
-| Strategija          | Aprašymas                                                                                                                                                                                                            |
-| :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `priority`          | Sutvarkytas sąrašas, kuriame pirmasis tikslas parenkamas pagal aiškiai nurodytą prioritetą                                                                                                                           |
-| `weighted`          | Svertinis atsitiktinis parinkimas pagal kiekvieno tikslo svorį                                                                                                                                                       |
-| `round-robin`       | Cikliškai pereinama per tikslus nustatyta tvarka (paketais; žr. toliau)                                                                                                                                              |
-| `context-relay`     | Kontekstas perduodamas tarp tikslų (ilgiems pokalbiams)                                                                                                                                                              |
-| `fill-first`        | Prieš pereinant prie kito tikslo, išnaudojama kiekvieno tikslo kvota                                                                                                                                                 |
-| `p2c`               | Atsitiktinis apkrovos balansavimas, pasirenkant geresnį iš 2 variantų                                                                                                                                                |
-| `random`            | Tolygus atsitiktinis parinkimas                                                                                                                                                                                      |
-| `least-used`        | Pasirenkamas tikslas, kurio dabartinė apkrova mažiausia                                                                                                                                                              |
-| `cost-optimized`    | Minimizuojama vienos užklausos kaina pagal kataloge nurodytas kainas                                                                                                                                                 |
-| `reset-aware` ⭐    | Pirmenybė teikiama pagal kvotos atkūrimo laiką — trumpesni atkūrimo intervalai reitinguojami aukščiau                                                                                                                |
-| `reset-window`      | Pirmenybė teikiama tikslams, kurių kvotos laikotarpis bus atkurtas greičiausiai                                                                                                                                      |
-| `headroom`          | Pasirenkamas tikslas, turintis didžiausią likusios kvotos rezervą                                                                                                                                                    |
-| `strict-random`     | Atsitiktinis parinkimas be pasikartojimų šalinimo                                                                                                                                                                    |
-| `auto`              | Naudojamas „Auto Combo“ vertinimas (16 veiksnių) — **rekomenduojama**                                                                                                                                                |
-| `lkgp`              | Paskutinis žinomas veikiantis kelias (naudojamas paskutinis sėkmingai veikęs teikėjas, o jam nesuveikus taikomos taisyklės)                                                                                          |
-| `context-optimized` | Pasirenkamas tikslas, geriausiai atitinkantis dabartinį konteksto dydį                                                                                                                                               |
-| `cache-optimized`   | Tikslai perrikiuojami pagal užklausų podėlio atitiktį — pirmiausia bandomas ryšys, kuriame greičiausiai jau yra šios užklausos podėlyje saugomas prefiksas (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
-| `fusion` 🧬         | Užklausa lygiagrečiai siunčiama modelių grupei, o tada vertinimo modelis susintetina vieną atsakymą (žr. toliau)                                                                                                     |
-| `pipeline`          | Tikslai vykdomi nuosekliai, kiekvieno veiksmo išvestį perduodant kaip kito veiksmo įvestį; grąžinamas tik galutinis atsakymas (#6396)                                                                                |
+| Strategija          | Aprašymas                                                                                                                                                                                                              |
+| :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `priority`          | Sąrašas, kuriame pirmasis taikinys parenkamas pagal aiškiai nurodytą prioritetą                                                                                                                                        |
+| `weighted`          | Svertinis atsitiktinis parinkimas pagal kiekvieno taikinio svorį                                                                                                                                                       |
+| `round-robin`       | Taikiniai cikliškai parenkami iš eilės (paketais; žr. toliau)                                                                                                                                                          |
+| `context-relay`     | Kontekstas perduodamas tarp taikinių (ilgiems pokalbiams)                                                                                                                                                              |
+| `fill-first`        | Prieš pereinant prie kito taikinio, išnaudojama kiekvieno taikinio kvota                                                                                                                                               |
+| `p2c`               | Atsitiktinis apkrovos balansavimas taikant dviejų pasirinkimų principą                                                                                                                                                 |
+| `random`            | Tolygus atsitiktinis parinkimas                                                                                                                                                                                        |
+| `least-used`        | Parenkamas mažiausią esamą apkrovą turintis taikinys                                                                                                                                                                   |
+| `cost-optimized`    | Atsižvelgiant į katalogo kainodarą, minimizuojama vienos užklausos kaina $                                                                                                                                             |
+| `reset-aware` ⭐    | Prioritetas nustatomas pagal kvotos atkūrimo laiką — trumpesni atkūrimo intervalai vertinami geriau                                                                                                                    |
+| `reset-window`      | Pirmenybė teikiama taikiniams, kurių kvotos intervalas bus atkurtas greičiausiai                                                                                                                                       |
+| `headroom`          | Parenkamas taikinys, turintis didžiausią likusios kvotos rezervą                                                                                                                                                       |
+| `quota-weighted`    | Išnaudotos paskyros praleidžiamos, tada iš likusiųjų pasirenkama proporcingai likusiai kvotai, padalytai iš vykdomų užklausų skaičiaus; esami pokalbiai lieka priskirti tam pačiam taikiniui                           |
+| `strict-random`     | Atsitiktinis parinkimas nešalinant pasikartojimų                                                                                                                                                                       |
+| `auto`              | Naudojamas „Auto Combo“ vertinimas (16 veiksnių) — **rekomenduojama**                                                                                                                                                  |
+| `lkgp`              | Paskutinis žinomas veikiantis kelias (priskiriama paskutiniam sėkmingam teikėjui, o jam nesuveikus taikomos taisyklės)                                                                                                 |
+| `context-optimized` | Parenkamas taikinys, geriausiai atitinkantis esamą konteksto dydį                                                                                                                                                      |
+| `cache-optimized`   | Taikiniai perrikiuojami pagal užklausos podėlio atitiktį — pirmiausia bandomas ryšys, kuris greičiausiai jau turi podėlyje išsaugotą šios užklausos prefiksą (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
+| `fusion` 🧬         | Užklausa lygiagrečiai siunčiama modelių grupei, o tada vertinimo modelis susintetina vieną atsakymą (žr. toliau)                                                                                                       |
+| `pipeline`          | Taikiniai vykdomi nuosekliai, kiekvieno etapo išvestį perduodant kaip kito etapo įvestį; grąžinamas tik galutinis atsakymas (#6396)                                                                                    |
 
 ⭐ = Nauja v3.8.0 versijoje · 🧬 = Nauja v3.8.36 versijoje
 
 ### `weighted` semantika
 
-`weighted` yra **proporcingas atsitiktinis parinkimas kiekvienai užklausai**
+`weighted` yra **proporcinis atsitiktinis pasirinkimas kiekvienai užklausai**
 (`open-sse/services/combo/targetSorters.ts` → `selectWeightedTarget`), o ne išlyginimo mechanizmas:
 
-- Kiekvienai užklausai parenkamas **vienas** veiksmas, kurio tikimybė yra `weight / totalWeight`; likę veiksmai
-  išrikiuojami mažėjančia svorio tvarka ir tai užklausai naudojami kaip atsarginė grandinė.
-- Veiksmas, kurio svoris yra `0` (arba nenurodytas), **niekada neparenkamas**, kol bent vieno kito veiksmo
-  svoris yra > 0 — jis gali būti naudojamas tik kaip atsarginis variantas, kai parinktas veiksmas nesuveikia. Parinkimas tampa tolygus tik tada, kai **visi**
-  svoriai yra 0.
-- Veiksmai, kurių visi tikslai nepasiekiami — teikėjo grandinės pertraukiklio būsena `OPEN`, ryšio
-  laukimo laikotarpis, modelio blokavimas — pašalinami dar prieš atliekant parinkimą
-  (`open-sse/services/combo/targetResolution.ts`), todėl vienintelis veikiantis veiksmas laikinai gali būti
+- Kiekvienai užklausai parenkamas **vienas** etapas, kurio tikimybė yra `weight / totalWeight`; likę etapai
+  surikiuojami mažėjančia svorio tvarka ir sudaro tos užklausos atsarginę seką.
+- Etapas, kurio svoris yra `0` (arba nenurodytas), **niekada neparenkamas**, kol bent vieno kito etapo
+  svoris yra > 0 — jis gali būti naudojamas tik kaip atsarginis variantas, jei parinktas etapas nesuveikia. Tik kai **visi**
+  svoriai yra 0, parinkimas tampa tolygiai atsitiktinis.
+- Etapai, kurių visi taikiniai nepasiekiami — teikėjo grandinės pertraukiklio būsena `OPEN`, ryšio
+  atvėsimo laikotarpis arba modelio blokavimas — pašalinami dar prieš atliekant parinkimą
+  (`open-sse/services/combo/targetResolution.ts`), todėl vienintelis veikiantis etapas laikinai gali būti
   parenkamas kiekvienai užklausai.
-- `stickyWeightedLimit` (kombinacijos konfigūracija, numatytoji reikšmė `1` = išjungta) išlaiko parinktą veiksmą tiek
+- `stickyWeightedLimit` (kombinacijos konfigūracija, numatytoji reikšmė `1` = išjungta) išlaiko parinktą etapą tiek
   sėkmingų užklausų iš eilės, prieš atliekant naują parinkimą.
 
-Norėdami naudoti griežtą rotaciją, rinkitės `round-robin`; vienodi `weighted` svoriai užtikrina statistinį, o ne
+Griežtai rotacijai naudokite `round-robin`; vienodi `weighted` svoriai užtikrina statistinį, o ne
 griežtą balansą.
 
-### Agentinis konvejerio režimas
+### Agentinės sekos režimas
 
-Dviejų žingsnių `pipeline` derinys gali įjungti planuotojo / vykdytojo maršruto parinkimą naudodamas
-`config.agenticOrchestration.enabled`. Pirmasis tikslas atsakingas už planavimą ir galutinius atsakymus;
-antrasis tikslas generuoja klientui pritaikytus įrankių iškvietimus. „OmniRoute“ aptinka įrankių rezultatų
-tęsinius pagal užklausos protokolą, klausia planuotojo, ar reikalingas dar vienas įrankių vykdymo etapas,
-ir dinamiškai parenka vykdytoją arba planuotoją kaip galutinį klientui matomą
-žingsnį.
+Dviejų žingsnių `pipeline` derinyje galima įjungti planuotojo / vykdytojo maršruto parinkimą
+naudojant `config.agenticOrchestration.enabled`. Pirmasis tikslas atsakingas už planavimą ir galutinius atsakymus;
+antrasis tikslas generuoja kliento formatui pritaikytus įrankių iškvietimus. „OmniRoute“ aptinka įrankių rezultatų
+tęsinius pagal užklausos protokolą, klausia planuotojo, ar reikia dar vieno įrankių vykdymo etapo,
+ir dinamiškai parenka vykdytoją arba planuotoją kaip galutinį
+klientui pateikiamą žingsnį.
 
 ```json
 {
@@ -347,34 +348,34 @@ ir dinamiškai parenka vykdytoją arba planuotoją kaip galutinį klientui matom
 }
 ```
 
-Vykdytojas viename atsakyme gali sugeneruoti kelis nepriklausomus iškvietimus. Priklausomi iškvietimai
-apdorojami vėlesniuose kliento įrankių rezultatų etapuose, o planuotojas peržiūri kiekvieną rezultatą.
-Numatytoji `maxToolRounds` reikšmė yra `8`; leidžiamos reikšmės nuo `1` iki `32`. Pasiekus ribą, planuotojas
-turi pateikti geriausią tuo metu įmanomą galutinį atsakymą. Vidiniai planuotojo sprendimai kaupiami buferyje, o
-pasirinktas klientui matomas atsakymas išlaiko pradinę srautinio perdavimo nuostatą.
+Vykdytojas viename atsakyme gali pateikti kelis nepriklausomus iškvietimus. Priklausomi iškvietimai
+apdorojami vėlesniuose kliento įrankių rezultatų perdavimo etapuose, o planuotojas peržiūri kiekvieną rezultatą.
+Numatytoji `maxToolRounds` reikšmė yra `8`, o leistinas intervalas – `1`–`32`; pasiekus ribą, planuotojas turi
+pateikti geriausią įmanomą galutinį atsakymą. Vidiniai planuotojo sprendimai kaupiami buferyje, o
+pasirinktame klientui pateikiamame atsakyme išsaugoma pradinė srautinio perdavimo nuostata.
 
-### `round-robin` pastovi paketų grupė ir paskyrų išplėtimas
+### `round-robin` nuoseklus grupavimas ir paskyrų išplėtimas
 
-„Round-robin“ užklausos grupuojamos į paketus, o ne apdorojamos po vieną kiekviename žingsnyje:
+„Round-robin“ taikomas grupėmis, o ne po vieną užklausą kiekviename žingsnyje:
 
 - `stickyRoundRobinLimit` (pirmiausia derinio konfigūracija, tada `comboStickyRoundRobinLimit`, tada
-  `settings.stickyRoundRobinLimit`; numatytoji reikšmė – **3**) išlaiko tą patį tikslą nurodytam
-  nuoseklių sėkmingų užklausų skaičiui prieš pereinant prie kito. Nustatykite derinio perrašymo reikšmę į `1`, jei norite
-  kaitalioti po kiekvienos užklausos. Derinio rengyklė rodo galiojančią reikšmę ir sluoksnį, iš kurio ji paimta.
-- `connectionAwareExpansion` (pirmiausia derinio konfigūracija, tada nustatymai; numatytoji reikšmė – **false**) prieš kaitaliojimą
-  išplečia kiekvieną teikėjo lygmens žingsnį į atskirus kiekvienos paskyros tikslus. B grupės strategijos
-  (prioritetinė, svertinė, „round-robin“, atsitiktinė, p2c, mažiausiai naudota, pagal kainą optimizuota, lkgp,
-  pirmiausia užpildoma, griežtai atsitiktinė, pagal kontekstą optimizuota, pagal podėlį optimizuota, konteksto perdavimo, suliejimo,
-  „pipeline“) išlaiko teikėjo lygmens rodinį, kol ši parinktis neįjungiama. Derinio rengyklėje galima pasirinkti
+  `settings.stickyRoundRobinLimit`, numatytoji reikšmė – **3**) išlaiko tą patį tikslą nurodytą skaičių
+  sėkmingų užklausų iš eilės prieš pereinant prie kito. Kad rotacija vyktų po kiekvienos užklausos,
+  nustatykite derinio perrašymo reikšmę į `1`. Derinių rengyklė rodo galiojančią reikšmę ir sluoksnį, iš kurio ji gauta.
+- `connectionAwareExpansion` (pirmiausia derinio konfigūracija, tada nuostatos, numatytoji reikšmė – **false**) prieš
+  rotaciją išplečia kiekvieną teikėjo lygmens žingsnį į atskirus kiekvienos paskyros tikslus. B grupės strategijos
+  (priority, weighted, round-robin, random, p2c, least-used, cost-optimized, lkgp,
+  fill-first, strict-random, context-optimized, cache-optimized, context-relay, fusion,
+  pipeline) išlaiko teikėjo lygmens rodinį, kol ši parinktis neįjungta. Derinių rengyklėje galima pasirinkti
   paveldėti / įjungti / išjungti; paveldėjimo atveju naudojama visuotinė numatytoji reikšmė (išjungta).
-- Užklausų podėlio lokalumu pagrįstas maršruto parinkimas (`promptCacheAffinityEnabled`; numatytoji reikšmė – **true**) pertvarko
-  prisegtus ryšius taip, kad sutampantys podėlio raktai liktų vienoje paskyroje. Jam teikiama pirmenybė prieš
-  „round-robin“ ir svertinį prisegtų atskirų paskyrų žingsnių kaitaliojimą. Jei reikia griežto kaitaliojimo, išjunkite jį skiltyje
-  Nustatymai → Derinių numatytosios reikšmės. Atskiro derinio perrašymo galimybės nėra.
+- Raginimų podėlio lokalumu pagrįstas maršruto parinkimas (`promptCacheAffinityEnabled`, numatytoji reikšmė – **true**) pertvarko
+  prisegtus ryšius, kad sutampantys podėlio raktai liktų vienoje paskyroje. Jam teikiama pirmenybė prieš
+  „round-robin“ ir svertinę rotaciją tarp prisegtų kiekvienos paskyros žingsnių. Jei reikia griežtos rotacijos, išjunkite jį
+  skiltyje Settings → Combo defaults. Atskiro derinio perrašymo parinkties nėra.
 
-Kai vienam modeliui naudojamas kelių paskyrų kaitaliojimas, geriau rinkitės **vieną dinaminės paskyros žingsnį** (tuščias
-`connectionId`, visas telkinys), kurio pastovumo riba yra `1`, o ne tris prisegtus `connectionId`.
-Naudojant prisegtus žingsnius kartu su susiejimu, pasirenkama ta pati paskyra, net kai RR skaitiklis
+Kai vienam modeliui naudojama kelių paskyrų rotacija, rinkitės **vieną dinaminių paskyrų žingsnį** (tuščias
+`connectionId`, visas telkinys) su nuoseklumo riba `1`, o ne tris prisegtus `connectionId`.
+Naudojant prisegtus žingsnius kartu su giminingumu, vis tiek pasirenkama ta pati paskyra, net kai RR skaitiklis
 didėja.
 
 ## Sintezės strategija
@@ -816,15 +817,15 @@ sąmoningai neįtraukti į CI, nes jiems reikia tikrų prisijungimo duomenų ir 
 
 ## Failai
 
-| Failas                                                    | Paskirtis                                                                                                              |
-| :-------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------- |
-| `open-sse/services/autoCombo/scoring.ts`                  | 16 veiksnių vertinimo funkcija, `DEFAULT_WEIGHTS`, telkinio normalizavimas                                             |
-| `open-sse/services/autoCombo/taskFitness.ts`              | Modelio × užduoties tinkamumo paieška                                                                                  |
-| `open-sse/services/autoCombo/engine.ts`                   | Atrankos logika, banditas, biudžeto riba                                                                               |
-| `open-sse/services/autoCombo/selfHealing.ts`              | Pašalinimas, patikros, incidento režimas                                                                               |
-| `open-sse/services/autoCombo/modePacks.ts`                | 6 svorių profiliai („ship-fast“, „cost-saver“, „quality-first“, „offline-friendly“, „reliability-first“, „chaos-mode“) |
-| `open-sse/services/autoCombo/autoPrefix.ts`               | `auto/` prefikso analizatorius + 6 variantai                                                                           |
-| `open-sse/services/autoCombo/virtualFactory.ts`           | Sukuria atmintyje laikomą `AutoComboConfig` iš aktyvių ryšių                                                           |
-| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | Testavimo sąsaja teikėjų registrui imituoti                                                                            |
-| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (19 strategijų)                                                                              |
-| `src/sse/handlers/chat.ts`                                | Integracija: ankstyvasis išėjimas pagal „auto“ prefiksą                                                                |
+| Failas                                                    | Paskirtis                                                                                                                                             |
+| :-------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open-sse/services/autoCombo/scoring.ts`                  | 16 veiksnių vertinimo funkcija, `DEFAULT_WEIGHTS`, telkinio normalizavimas                                                                            |
+| `open-sse/services/autoCombo/taskFitness.ts`              | Modelio × užduoties tinkamumo paieška                                                                                                                 |
+| `open-sse/services/autoCombo/engine.ts`                   | Atrankos logika, banditas, biudžeto riba                                                                                                              |
+| `open-sse/services/autoCombo/selfHealing.ts`              | Išskyrimas, patikros, incidentų režimas                                                                                                               |
+| `open-sse/services/autoCombo/modePacks.ts`                | 6 svorių profiliai (greitas pateikimas, išlaidų taupymas, kokybė pirmiausia, pritaikyta darbui neprisijungus, patikimumas pirmiausia, chaoso režimas) |
+| `open-sse/services/autoCombo/autoPrefix.ts`               | `auto/` prefikso analizatorius + 6 variantai                                                                                                          |
+| `open-sse/services/autoCombo/virtualFactory.ts`           | Iš aktyvių ryšių atmintyje sukuria `AutoComboConfig`                                                                                                  |
+| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | Testavimo sąsaja teikėjų registrui imituoti                                                                                                           |
+| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (20 strategijų)                                                                                                             |
+| `src/sse/handlers/chat.ts`                                | Integracija: ankstyvas išėjimas pagal „auto“ prefiksą                                                                                                 |

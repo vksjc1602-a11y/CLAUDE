@@ -207,136 +207,190 @@ Adi marşrutlaşdırmada uyğun idarə olunan namizədlər mövcuddursa, lakin b
 
 **Əhatə dairəsi:** provayder + bağlantı + model üçlüyü.
 
-**Statusa görə açar əhatəsi:** uğursuzluq statusu bloklanmanın hansı açara
-yazılacağını müəyyən edir (`open-sse/services/accountFallback/exactModelLock.ts`
-faylındakı `resolveLockoutScope()`):
+**Status üzrə açarın əhatə dairəsi:** bloklanmanın hansı açara yazılacağını uğursuzluq statusu müəyyən edir
+(`open-sse/services/accountFallback/exactModelLock.ts` daxilində `resolveLockoutScope()`):
 
-- `429` / `403` / `402` — kvota və ya istifadə hüququ siqnalı — **kvota ailəsini**
-  bloklayır: codex üçün bağlantının bütün `codex` / `spark` əhatəsi (hər bir
-  `gpt-5*` modeli), digər provayderlər üçün `getQuotaScopedModelForProvider()`.
-- `404` əsas modeli bloklayır (`getModelLockKey()` `not_found` əhatəsini daraldır).
-- İstənilən digər status — `5xx` nəqliyyat/server xətaları və keyfiyyət
-  yoxlaması nəticəsində OmniRoute-un özünün yaratdığı `502` — yalnız **dəqiq**
-  provayder/bağlantı/model üçlüyünü bloklayır. Bir modeldəki nasaz axın hesabın
-  kvotası barədə sübut deyil; bu qaydadan əvvəl `codex/gpt-5.6-luna` üçün bir boş
-  cavab həmin bağlantının bütün `gpt-5*` modellərini, kvota toxunulmaz qaldığı
-  halda, 2–30 dəqiqəlik (artan şəkildə) marşrutlaşdırmadan çıxarırdı.
-- Çağıranın açıq şəkildə göstərdiyi `scope` seçimi həmişə üstünlük təşkil edir
-  (Antigravity `"exact"` ötürür).
+- `429` / `403` / `402` — kvota və ya istifadə hüququ siqnalı — **kvota ailəsini** bloklayır:
+  codex üçün bağlantının bütün `codex` / `spark` əhatə dairəsini (bağlantının hər bir `gpt-5*` modelini),
+  digər provayderlər üçün isə `getQuotaScopedModelForProvider()`.
+- `404` yalnız modelin özünü bloklayır (`getModelLockKey()` `not_found` əhatəsini daraldır).
+- İstənilən digər status — `5xx` ötürmə/server xətaları və keyfiyyət yoxlaması nəticəsində
+  OmniRoute-un özünün yaratdığı `502` — yalnız **dəqiq**
+  provayder/bağlantı/model üçlüyünü bloklayır. Bir modeldəki nasaz axın hesabın kvotası
+  haqqında sübut deyil; bu qaydadan əvvəl `codex/gpt-5.6-luna` üzrə bir boş cavab,
+  kvotaya toxunulmadığı halda həmin bağlantının bütün `gpt-5*` modellərini
+  2–30 dəqiqə ərzində (artan müddətlə) marşrutlaşdırmadan çıxarırdı.
+- Çağıranın açıq şəkildə verdiyi `scope` seçimi həmişə üstünlük təşkil edir (Antigravity `"exact"` ötürür).
 
-**Məqsəd:** yalnız bir model əlçatan olmadıqda və ya kvota ilə məhdudlaşdırıldıqda bütöv bağlantının deaktiv edilməsinin qarşısını almaq.
+**Məqsəd:** yalnız bir model əlçatan olmadıqda və ya kvota ilə məhdudlaşdırıldıqda bütün bağlantının deaktiv edilməsinin qarşısını almaq.
 
 **Nümunələr:**
 
-- Hər model üzrə kvota tətbiq edən və 429 qaytaran provayderlər
-- Bir çatışmayan model üçün 404 qaytaran lokal provayderlər
+- Hər model üçün ayrıca kvota tətbiq edən və 429 qaytaran provayderlər
+- Çatışmayan bir model üçün 404 qaytaran lokal provayderlər
 - Provayderə xas rejim/model icazəsi xətaları (məsələn, Grok rejimləri)
 
-**İcra:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
+**Reallaşdırma:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
 ### Model Soyuma Müddətləri İdarəetmə Paneli (v3.8.0)
 
-İnterfeys: Parametrlər → Model Soyuma Müddətləri (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+İstifadəçi interfeysi: Parametrlər → Model Soyuma Müddətləri (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
 Aktiv bloklanmaları bu məlumatlarla siyahıya alır: provayder, bağlantı, model, səbəb, expiresAt. Operatorlar kartdan modeli əl ilə yenidən aktivləşdirə bilərlər.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — aktiv bloklanmaları siyahıya almaq
-- `DELETE /api/resilience/model-cooldowns` — əl ilə yenidən aktivləşdirmək. Sorğu gövdəsi: `{provider, connection, model}`. Avtorizasiya: idarəetmə.
+- `GET /api/resilience/model-cooldowns` — aktiv bloklanmaları siyahıya alır
+- `DELETE /api/resilience/model-cooldowns` — əl ilə yenidən aktivləşdirmə. Gövdə: `{provider, connection, model}`. Autentifikasiya: idarəetmə.
 
-### Bloklanma parametrləri interfeysi + uğurla azalma əsasında bərpa (v3.8.23)
+### Soyuma Müddəti Meneceri
 
-Model bloklanması həmişə aktiv olan, kodda sərt şəkildə müəyyənləşdirilmiş
-davranışdan ayrıca parametr kartına və özünü sağaldan bərpa yoluna malik, tam
-konfiqurasiya edilə bilən, könüllü aktivləşdirilən funksiyaya çevrildi.
+İstifadəçi interfeysi: Monitorinq → Soyuma Müddəti Meneceri (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Hər provayder səhifəsini ayrıca açmaq əvəzinə, müvəqqəti səbəbə görə
+marşrutlaşdırmadan çıxarılmış bütün bağlantılar üçün vahid səhifə. Burada bağlantıların soyuma müddətləri, model bloklanmaları və terminal
+vəziyyətlər siyahıya alınır; bunlar hər bağlantı, seçim və ya provayderin bütün bağlantıları üzrə təmizlənir
+və ən çox tənzimlənən soyuma qaydaları redaktə edilir: `streamStallCooldown.enabled` və OAuth / API açarı üçün
+`connectionCooldown` əsas soyuma müddəti və maksimum geriçəkilmə addımları (`PATCH /api/resilience` vasitəsilə
+saxlanılır). Terminal vəziyyətlər (`banned`, `expired`, `credits_exhausted`) siyahıya
+alınır, lakin burada heç vaxt təmizlənmir.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autentifikasiya: idarəetmə):
+
+- `GET /api/resilience/cooldowns[?provider=]` — status, qalan soyuma müddəti,
+  geriçəkilmə səviyyəsi, son xəta növü və model bloklanmaları ilə bağlantılar (giriş məlumatları olmadan)
+- `POST /api/resilience/cooldowns` — gövdə `{connectionIds: string[]}` və ya
+  `{all: true, provider?}`; `{cleared, unchanged, skippedTerminal, lockoutsCleared}` qaytarır
+
+### Bloklanma parametrləri interfeysi + uğurla azalan bərpa (v3.8.23)
+
+Model bloklanması həmişə aktiv olan sərt kodlaşdırılmış davranışdan tam konfiqurasiya edilə bilən,
+istəyə bağlı funksiyaya çevrildi və öz parametr kartını, eləcə də özünü bərpa edən sağalma mexanizmini əldə etdi.
 
 **Parametrlər kartı:** Parametrlər → Model Bloklanması
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Bu, yuxarıdakı yalnız oxumaq üçün olan `ModelCooldownsCard`-dan (yalnız aktiv
-bloklanmaları _siyahıya alır_) **fərqlidir** — yeni kart _parametrləri
-konfiqurasiya edir_. Standart dəyərlər `DEFAULT_MODEL_LOCKOUT_SETTINGS`
-(`src/lib/resilience/modelLockoutSettings.ts`) daxilindədir:
+Bu, yuxarıdakı yalnız oxumaq üçün nəzərdə tutulmuş `ModelCooldownsCard` kartından (yalnız aktiv bloklanmaları
+_siyahıya alır_) **fərqlidir** — yeni kart _parametrləri konfiqurasiya edir_. Standart dəyərlər
+`DEFAULT_MODEL_LOCKOUT_SETTINGS` daxilindədir
+(`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Parametr                | Standart dəyər                   | Mənası                                                         |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------- |
-| `enabled`               | `false`                          | Əsas keçid — model bloklanması **standart olaraq söndürülüb**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model əhatəli xəta sayılan yuxarı axın statusları.             |
-| `baseCooldownMs`        | `120_000` (120 san.)             | İlk xəta üçün ilkin bloklanma müddəti.                         |
-| `maxCooldownMs`         | `1_800_000` (30 dəq.)            | Artırılmış soyuma müddətinin yuxarı həddi.                     |
-| `maxBackoffSteps`       | `10`                             | Eksponensial geriçəkilmə artımının maksimum addım sayı.        |
-| `useExponentialBackoff` | `true`                           | Təkrarlanan xətaların soyuma müddətini eksponensial artırması. |
+| Parametr                | Standart dəyər                   | Mənası                                                                           |
+| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Əsas keçid — model bloklanması **standart olaraq söndürülüb**.                   |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model əhatəli xəta kimi sayılan yuxarı axın statusları.                          |
+| `baseCooldownMs`        | `120_000` (120 san.)             | İlk xəta üçün ilkin bloklanma müddəti.                                           |
+| `maxCooldownMs`         | `1_800_000` (30 dəq.)            | Artırılmış soyuma müddətinin yuxarı həddi.                                       |
+| `maxBackoffSteps`       | `10`                             | Maksimum eksponensial geriçəkilmə artımı addımları.                              |
+| `useExponentialBackoff` | `true`                           | Təkrarlanan xətaların soyuma müddətini eksponensial şəkildə artırıb-artırmaması. |
 
-Parametrlər adi parametr yaddaşı vasitəsilə saxlanılır və dayanıqlılıq
-parametrləri sxemi ilə yoxlanılır; kart `baseCooldownMs`/`maxCooldownMs`
-(`maxCooldownMs ≥ baseCooldownMs` olmaqla) və `maxBackoffSteps` dəyərlərini
-icazə verilən hədlərdə saxlayır.
+Parametrlər adi parametrlər anbarı vasitəsilə saxlanılır və dayanıqlılıq parametrləri sxemi ilə
+yoxlanılır; kart `baseCooldownMs`/`maxCooldownMs`
+(`maxCooldownMs ≥ baseCooldownMs` olmaqla) və `maxBackoffSteps` dəyərlərini icazə verilən hədlərlə məhdudlaşdırır.
 
-**Uğurla azalma əsasında bərpa:** bərpa yalnız taymerin bitməsinə əsaslanmır.
-Sağlam cavab modelin xəta sayını mərhələli şəkildə azaldır, beləliklə müddətin
-ortasında bərpa olunan model taymer bitməzdən əvvəl artımı dayandırır (və
-bloklanmanı ləğv edir). Kombinasiya hədəfindən uğurlu cavab gəldikdə
-`open-sse/services/combo.ts`, `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`) funksiyasını çağırır; bu funksiya
-saxlanılan `failureCount` dəyərini **yarıya endirir**
-(`Math.floor(failureCount / 2)`); dəyər `0` olduqda bloklanma qeydi tamamilə
-silinir. Bunun qarşılığı olan `recordModelLockoutFailure()` artım pəncərəsi
-daxilindəki xətalarda sayğacı artırır (və soyuma müddətini uzadır). Uğurla azalma
-mexanizmi sadə taymer bitməsinə əlavə olaraq işləyir — hər iki yol modeli yenidən
-aktivləşdirə bilər.
+**Uğurla azalan bərpa:** bərpa **yalnız** taymerin bitməsindən asılı deyil. Sağlam
+cavab modelin xəta sayını addım-addım azaldır; beləliklə, müddətin ortasında bərpa olunan model
+taymeri bitməzdən əvvəl artımı dayandırır (və bloklanmanı aradan qaldırır). Uğurlu
+combo hədəfində `open-sse/services/combo.ts`, saxlanılmış
+`failureCount` dəyərini **yarıya endirən** (`Math.floor(failureCount / 2)`) `decayModelFailureCount()`
+funksiyasını (`open-sse/services/accountFallback.ts`) çağırır; dəyər `0` olduqda bloklanma
+qeydi tamamilə silinir. Onun qarşılığı olan `recordModelLockoutFailure()`
+artım pəncərəsi daxilindəki xətalar zamanı sayğacı artırır (və soyuma müddətini uzadır).
+Uğurla azalma mexanizmi adi taymer müddətinin bitməsinə əlavədir —
+hər iki yol modeli yenidən aktivləşdirə bilər.
 
-**Vəziyyət:** bloklanmalar verilənlər bazasında saxlanılmır, **yaddaşda**
-(`provider:connectionId:model` açarı ilə indekslənən prosesə aid `ModelLockoutEntry`
-`Map`-ləri, dəqiq əhatəli bloklanmalar üçün isə
-`provider:connectionId:exact:model`) saxlanılır — yenidən başlatma zamanı
-itir. _Parametrlər_ daimi saxlanılır; aktiv bloklanma _vəziyyəti_ müvəqqətidir.
+**Vəziyyət:** bloklanmalar DB-də saxlanılmır, **yaddaşda** saxlanılır (açarı
+`provider:connectionId:model` olan hər prosesə aid `ModelLockoutEntry` `Map`-ləri, dəqiq əhatəli kilidlər üçün isə
+`provider:connectionId:exact:model`) — yenidən başladılma zamanı itirilirlər.
+_Parametrlər_ daimi saxlanılır; aktiv bloklanma _vəziyyəti_ isə müvəqqətidir.
 
 ---
 
-## 4. Kvota paylaşımı üçün paralellik nəzarəti (v3.8.36)
+## 4. Kvota paylaşımı üçün paralellik idarəetməsi (v3.8.36)
 
-Abunəlik hesabları (GLM, MiniMax və s.) çox vaxt yalnız ~1–3 paralel sorğunu
-qəbul edir; bu həddin aşılması 429 xətalarına və gözləmə müddətlərinə səbəb olur. Bu problem
-bir neçə API açarının eyni yuxarı səviyyəli hesabı paylaşdığı **quota-share** (`qtSd/…`)
-kombinasiyalarında xüsusilə kəskindir. Üç səviyyə paylaşılan hesabın sorğu axınına məruz
-qalmasının qarşısını alır.
+Abunəlik hesabları (GLM, MiniMax və s.) çox vaxt yalnız ~1–3 paralel
+sorğunu qəbul edir; bu həddin aşılması 429 xətalarını və gözləmə müddətlərini işə salır. Bu problem
+bir neçə API açarının eyni yuxarı axın hesabını paylaşdığı **kvota paylaşımı**
+(`qtSd/…`) kombinasiyalarında xüsusilə kəskindir. Üç səviyyə ortaq hesabın sorğu axınına məruz qalmasının qarşısını alır.
 
 ### Hər bağlantı üzrə paralellik həddi (`max_concurrent`)
 
-Hər bir provayder bağlantısı `max_concurrent` yuxarı həddi təyin edə bilər
-(`provider_connections.max_concurrent`, bağlantı modal pəncərəsində / API / DB-də təyin edilir).
-Məhdudiyyət olmaması üçün onu boş saxlayın. Bu, aşağıdakı ardıcıllaşdırma səviyyəsini
-idarə edən yeganə parametrdir — onu hesabın real paralellik göstəricisinə uyğun təyin edin
-(məsələn, GLM ~1, MiniMax ~2).
+Hər provayder bağlantısı `max_concurrent` yuxarı həddi təyin edə bilər
+(`provider_connections.max_concurrent`, bağlantı modalında / API / DB vasitəsilə təyin edilir).
+Məhdudiyyət olmaması üçün onu boş saxlayın. Aşağıdakı ardıcıllaşdırma səviyyəsini
+idarə edən yeganə parametr budur — onu hesabın real paralellik səviyyəsinə uyğun təyin edin (məsələn, GLM ~1, MiniMax ~2).
+
+### Hər model üzrə paralellik hədləri (`modelConcurrency`)
+
+Bağlantı əlavə olaraq öz `rateLimitOverrides` xəritəsində hər model üçün dəqiq paralellik
+hədləri təyin edə bilər:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Bunu bağlantı modalında (**Sorğu tezliyi məhdudiyyətinin əvəzlənməsi → Hər model üzrə
+paralellik hədləri**, hər sətirdə bir `model=cap`) və ya eyni JSON strukturu ilə
+`PATCH /api/providers/[id]` vasitəsilə təyin edin. Açarların semantikası:
+
+- **Bütün bağlantı üzrə və modelə xas:** `maxConcurrent` ortaq
+  bağlantı üzrə ümumi yuxarı hədd olaraq qalır. Hər ikisi tətbiq edildikdə, hər iki keçid
+  eyni mürəkkəb keçiddə atomar şəkildə əldə edilir
+  (`global → provider → account → model`); faktiki davranışı tətbiq edilən daha
+  sərt məhdudiyyət müəyyən edir.
+- **Model açarı ilə dəqiq uyğunluq:** açar marşrutlaşdırma həllindən sonra
+  icraçıya ötürülən model sətridir — adətən müştəri tərəfindəki `provider/model`
+  aliası deyil (`zai/glm-5`, `glm-5` ilə uyğun gəlmir), sadə yuxarı axın model identifikatorudur
+  (`glm-5`). Dəyərlər paralel sorğular üçün müsbət tam ədəd yuxarı hədləridir.
+- **Lokal növbələmə, aşkarlama yoxdur:** həddi aşan sorğular mövcud
+  növbə/taymaut semantikası ilə lokal olaraq növbəyə alınır (tipli `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` qəbul xətaları). OmniRoute yuxarı axın siyasətini aşkarlamır və ya
+  nəticə çıxarmır — operatorun konfiqurasiya etdiyi dəqiq hədləri tətbiq edir.
+  Doymuş model keçidi provayderi heç vaxt deaktiv etmir və modelin daimi bloklanmasına
+  səbəb olmur; yuxarı axın 429/gözləmə/alternativə keçid davranışı xəta üçün son müdafiə olaraq
+  qalır.
+- **Hər bağlantı, hər proses üzrə əhatə dairəsi:** hədlər hər verilənlər bazası bağlantısı
+  üçündür və yaddaşda saxlanılır; buna görə də eyni yuxarı axın API açarından təkrar istifadə edən iki bağlantı
+  bir-biri ilə koordinasiya olunmur.
+- **Konfiqurasiya edilməyibsə, davranış dəyişmir:** xəritənin buraxılması (və ya
+  idarə paneli sahəsinin boş saxlanılması) model keçidi əlavə etmir. Heç bir universal provayder məhdudiyyəti
+  iddia etməyən nümunə konfiqurasiya:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Kvota paylaşımı sorğularının ardıcıllaşdırılması
 
-Kvota paylaşımı üzrə yönləndirmə müsbət `max_concurrent` dəyəri təyin edilmiş
-bir bağlantını hədəflədikdə, həmin **hesaba** göndərilən paralel sorğular
-hər bağlantı üzrə semafor (`qsconn:<connectionId>` açarı) vasitəsilə ardıcıllaşdırılır:
-artıq sorğular hesabı yükləmək əvəzinə **növbədə gözləyir**. Mexanizm **fail-open**
-prinsipi ilə işləyir — dolmuş növbə və ya vaxt aşımı yönləndirilə bilən sorğunu rədd
-etmək əvəzinə onun slot olmadan davam etməsinə imkan verir. Bu funksiyanı
-**Settings → Resilience → Quota-share per-connection concurrency**
-(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standart olaraq aktivdir)
-bölməsində dəyişə bilərsiniz. `max_concurrent` həddi olmadıqda davranış dəyişmir.
+Kvota paylaşımı üzrə göndəriş müsbət `max_concurrent` dəyəri təyin edilmiş
+bağlantını hədəflədikdə, həmin **hesaba** yönələn paralel sorğular hər bağlantı üzrə
+semafor (`qsconn:<connectionId>`) vasitəsilə ardıcıllaşdırılır: artıq sorğular hesabı yükləmək əvəzinə
+**növbədə gözləyir**. Bu, **fail-open** prinsipinə əsaslanır — dolu
+növbə və ya taymaut göndərilə bilən sorğunu rədd etmək əvəzinə slot olmadan davam edir.
+Bunu **Parametrlər → Dayanıqlılıq → Kvota paylaşımı üçün hər bağlantı üzrə
+paralellik** bölməsində dəyişdirin (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standart olaraq
+aktivdir). `max_concurrent` həddi olmadıqda davranış dəyişmir.
 
-> Kvota paylaşımı üzrə marşrutlaşdırma keçidi (`selectQuotaShareTarget`, DRR + P2C)
-> özü də fail-open prinsipi ilə işləyir və yalnız həddə çatmış bağlantının
-> _prioritetini azaldır_ — tək bağlantılı hovuzda sərt məhdudiyyət tətbiq edə
-> bilmədiyi üçün sorğu axınının qarşısını faktiki olaraq bu semafor alır.
+> Kvota paylaşımı marşrutlaşdırma keçidi (`selectQuotaShareTarget`, DRR + P2C) özü də
+> fail-open prinsipinə əsaslanır və yalnız həddə çatmış bağlantının _prioritetini azaldır_ —
+> tək bağlantılı hovuzda sərt məhdudiyyət tətbiq edə bilmədiyinə görə axını faktiki olaraq
+> məhdudlaşdıran məhz bu semafordur.
 
-### Gözləmə müddətini nəzərə alan kombinasiya təkrarı
+### Kombinasiya üçün gözləmə müddətini nəzərə alan təkrar cəhd
 
-Hər bir kombinasiya strategiyasında (aktiv olduqda), QISA müvəqqəti gözləmə müddəti
-üçün 429 xətasını qəti hala gətirəcək sorğu 429-u qaytarmaq əvəzinə bu müddətin
-bitməsini gözləyir və yenidən yönləndirilir — bu, çoxmodelli kombinasiyalarda
-Gemini sinfinə aid TPM/RPM pəncərələrini (~60 san. retry-after), məsələn,
-2 modelli kombinasiyanın hər iki hədəfinin hər model üzrə sürət həddinə çatmasını
-əhatə edir. **Settings → Resilience** bölməsindəki `comboCooldownWait`
-(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) ilə məhdudlaşdırılır.
-`quota_exhausted` (gecə yarısına qədər kilidlənir) və ya autentifikasiya/tapılmama
-səbəbləri üçün heç vaxt gözləmir.
+Hər bir kombinasiya strategiyasında (aktiv olduqda), QISA keçici gözləmə müddəti üçün 429
+xətasını rəsmiləşdirəcək sorğu 429 qaytarmaq əvəzinə bu müddətin bitməsini gözləyir və
+yenidən göndərilir — bu, çoxmodelli kombinasiyalarda Gemini sinifli TPM/RPM pəncərələrini
+(~60 saniyəlik retry-after), məsələn, 2 modelli kombinasiyanın hər iki hədəfinin hər model üzrə
+sorğu tezliyi məhdudiyyətinə çatmasını əhatə edir. **Parametrlər → Dayanıqlılıq** bölməsindəki
+`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) ilə məhdudlaşdırılır. O, `quota_exhausted`
+(gecə yarısınadək kilidlənib) və ya autentifikasiya/tapılmadı səbəbləri üçün heç vaxt gözləmir.
 
 ---
 

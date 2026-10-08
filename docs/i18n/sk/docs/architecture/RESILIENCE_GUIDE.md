@@ -220,23 +220,23 @@ Súvisiace mechanizmy zostávajú oddelené:
 
 ---
 
-## 3. Uzamknutie modelu
+## 3. Zablokovanie modelu
 
 **Rozsah:** trojica poskytovateľ + pripojenie + model.
 
-**Rozsah kľúča podľa stavu:** stav zlyhania rozhoduje, do ktorého kľúča sa uzamknutie
-zapíše (`resolveLockoutScope()` v `open-sse/services/accountFallback/exactModelLock.ts`):
+**Rozsah kľúča podľa stavu:** chybový stav určuje, do ktorého kľúča sa zablokovanie zapíše
+(`resolveLockoutScope()` v `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — signál kvóty alebo oprávnenia — uzamkne **rodinu kvót**:
-  pre codex celý rozsah `codex` / `spark` (každý model `gpt-5*` daného
-  pripojenia), pre ostatných poskytovateľov `getQuotaScopedModelForProvider()`.
-- `404` uzamkne samotný model (`getModelLockKey()` zužuje `not_found`).
-- Akýkoľvek iný stav — transportné/serverové zlyhania `5xx` a vlastný
-  syntetizovaný stav `502` služby OmniRoute z validácie kvality — uzamkne iba **presnú**
+- `429` / `403` / `402` — signál kvóty alebo oprávnenia — zablokuje **rodinu kvót**:
+  v prípade codex celý rozsah `codex` / `spark` (každý model `gpt-5*` daného
+  pripojenia), v prípade ostatných poskytovateľov `getQuotaScopedModelForProvider()`.
+- `404` zablokuje samotný model (`getModelLockKey()` zužuje `not_found`).
+- Akýkoľvek iný stav — transportné/serverové chyby `5xx` a vlastný syntetizovaný
+  stav `502` služby OmniRoute z overovania kvality — zablokuje iba **presnú**
   trojicu poskytovateľ/pripojenie/model. Chybný stream jedného modelu nie je dôkazom
   o kvóte účtu; pred zavedením tohto pravidla jedna prázdna odpoveď modelu
-  `codex/gpt-5.6-luna` odstránila zo smerovania každý model `gpt-5*` daného pripojenia
-  na 2–30 minút (s postupným predlžovaním), hoci jeho kvóta zostala nedotknutá.
+  `codex/gpt-5.6-luna` odstránila z routovania každý model `gpt-5*` daného pripojenia
+  na 2–30 min (s eskaláciou), hoci jeho kvóta zostala nedotknutá.
 - Explicitná možnosť `scope` volajúceho má vždy prednosť (Antigravity odovzdáva `"exact"`).
 
 **Účel:** zabrániť deaktivácii celého pripojenia, keď je nedostupný alebo obmedzený kvótou iba jeden model.
@@ -245,104 +245,130 @@ zapíše (`resolveLockoutScope()` v `open-sse/services/accountFallback/exactMode
 
 - Poskytovatelia s kvótou pre jednotlivé modely vracajúci stav 429
 - Lokálni poskytovatelia vracajúci stav 404 pre jeden chýbajúci model
-- Zlyhania oprávnení pre režimy/modely špecifické pre poskytovateľa (napr. režimy Grok)
+- Chyby oprávnení špecifické pre režim/model poskytovateľa (napr. režimy Grok)
 
 **Implementácia:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Ovládací panel časových blokovaní modelov (v3.8.0)
+### Ovládací panel časov vychladnutia modelov (v3.8.0)
 
-Používateľské rozhranie: Nastavenia → Časové blokovania modelov (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Používateľské rozhranie: Nastavenia → Časy vychladnutia modelov (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Uvádza aktívne uzamknutia s týmito údajmi: poskytovateľ, pripojenie, model, dôvod, expiresAt. Operátori môžu model z karty manuálne znova povoliť.
+Uvádza aktívne zablokovania s údajmi: poskytovateľ, pripojenie, model, dôvod, expiresAt. Operátori môžu z karty model manuálne znova povoliť.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — zobrazí aktívne uzamknutia
+- `GET /api/resilience/model-cooldowns` — vypíše aktívne zablokovania
 - `DELETE /api/resilience/model-cooldowns` — manuálne opätovné povolenie. Telo: `{provider, connection, model}`. Autorizácia: správa.
 
-### Používateľské rozhranie nastavení uzamknutia + obnova s útlmom pri úspechu (v3.8.23)
+### Správca časov vychladnutia
 
-Uzamknutie modelu sa z trvalo zapnutého, pevne zakódovaného správania zmenilo na plne konfigurovateľnú,
-voliteľnú funkciu s vlastnou kartou nastavení a samoopravným mechanizmom obnovy.
+Používateľské rozhranie: Monitorovanie → Správca časov vychladnutia (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Karta nastavení:** Nastavenia → Uzamknutie modelu
+Jedna stránka pre každé pripojenie, ktoré je z dočasného dôvodu vyradené z routovania, namiesto
+otvárania stránky každého poskytovateľa. Uvádza časy vychladnutia pripojení, zablokovania modelov a konečné
+stavy, vymazáva ich pre jednotlivé pripojenia, pre výber alebo pre všetky pripojenia poskytovateľa
+a upravuje najčastejšie dolaďované pravidlá časov vychladnutia: `streamStallCooldown.enabled` a základný čas
+vychladnutia `connectionCooldown` pre OAuth / kľúč API a maximálny počet krokov spätného odstupu (uložené prostredníctvom
+`PATCH /api/resilience`). Konečné stavy (`banned`, `expired`, `credits_exhausted`) sú
+uvedené, ale nikdy sa tu nevymazávajú.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autorizácia: správa):
+
+- `GET /api/resilience/cooldowns[?provider=]` — pripojenia so stavom, zostávajúcim časom vychladnutia,
+  úrovňou spätného odstupu, typom poslednej chyby a zablokovaniami modelov (bez prihlasovacích údajov)
+- `POST /api/resilience/cooldowns` — telo `{connectionIds: string[]}` alebo
+  `{all: true, provider?}`; vracia `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Používateľské rozhranie nastavení zablokovania + obnovenie útlmom po úspechu (v3.8.23)
+
+Zablokovanie modelu sa z trvalo zapnutého správania napevno zakódovaného v kóde zmenilo na plne konfigurovateľnú,
+voliteľnú funkciu s vlastnou kartou nastavení a samoopravným mechanizmom obnovenia.
+
+**Karta nastavení:** Nastavenia → Zablokovanie modelu
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Táto karta sa **odlišuje** od vyššie uvedenej karty `ModelCooldownsCard` určenej iba na čítanie (ktorá iba
-_vypisuje_ aktívne uzamknutia) — nová karta _konfiguruje parametre_. Predvolené hodnoty
-sú uvedené v `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+Táto karta je **odlišná** od vyššie uvedenej karty `ModelCooldownsCard` iba na čítanie (ktorá len
+_vypisuje_ aktívne zablokovania) — nová karta _konfiguruje parametre_. Predvolené hodnoty
+sa nachádzajú v `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Nastavenie              | Predvolená hodnota               | Význam                                                                      |
-| ----------------------- | -------------------------------- | --------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Hlavný prepínač — uzamknutie modelu je **predvolene vypnuté**.              |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stavy nadradeného systému, ktoré sa počítajú ako zlyhanie viazané na model. |
-| `baseCooldownMs`        | `120_000` (120 s)                | Počiatočné trvanie uzamknutia pri prvom zlyhaní.                            |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Horná hranica postupne predlžovaného časového blokovania.                   |
-| `maxBackoffSteps`       | `10`                             | Maximálny počet krokov eskalácie exponenciálneho odstupu.                   |
-| `useExponentialBackoff` | `true`                           | Určuje, či opakované zlyhania exponenciálne predlžujú časové blokovanie.    |
+| Nastavenie              | Predvolená hodnota               | Význam                                                                     |
+| ----------------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Hlavný prepínač — zablokovanie modelu je **predvolene vypnuté**.           |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stavy z nadradeného systému, ktoré sa počítajú ako chyba viazaná na model. |
+| `baseCooldownMs`        | `120_000` (120 s)                | Počiatočné trvanie zablokovania pri prvej chybe.                           |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Horný limit eskalovaného času vychladnutia.                                |
+| `maxBackoffSteps`       | `10`                             | Maximálny počet krokov eskalácie exponenciálneho spätného odstupu.         |
+| `useExponentialBackoff` | `true`                           | Či opakované chyby exponenciálne predlžujú čas vychladnutia.               |
 
 Nastavenia sa uchovávajú prostredníctvom bežného úložiska nastavení a overujú pomocou
-schémy nastavení odolnosti; karta obmedzuje hodnoty `baseCooldownMs`/`maxCooldownMs`
+schémy nastavení odolnosti; karta obmedzuje `baseCooldownMs`/`maxCooldownMs`
 (pričom `maxCooldownMs ≥ baseCooldownMs`) a `maxBackoffSteps`.
 
-**Obnova s útlmom pri úspechu:** obnova **nie je** založená výlučne na uplynutí časovača. Úspešná
-odpoveď postupne znižuje počet zlyhaní modelu, takže model, ktorý sa zotavil
-uprostred časového okna, prestane eskalovať (a uzamknutie sa zruší) skôr, než by uplynul jeho časovač. Pri úspešnom
+**Obnovenie útlmom po úspechu:** obnovenie **nie je** založené iba na uplynutí časovača. Zdravá
+odpoveď postupne znižuje počet chýb modelu, takže model, ktorý sa obnovil
+uprostred intervalu, prestane eskalovať (a jeho zablokovanie sa vymaže) ešte pred uplynutím časovača. Pri úspešnom
 kombinovanom cieli `open-sse/services/combo.ts` volá `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), ktorá **zníži na polovicu** uloženú hodnotu
-`failureCount` (`Math.floor(failureCount / 2)`); keď dosiahne hodnotu `0`, záznam uzamknutia
-sa úplne odstráni. Zodpovedajúca funkcia `recordModelLockoutFailure()`
-zvyšuje počet (a predlžuje časové blokovanie) pri zlyhaniach v rámci
-eskalačného okna. Tento útlm pri úspechu dopĺňa bežné uplynutie časovača —
-model môže znova povoliť ktorýkoľvek z týchto mechanizmov.
+(`open-sse/services/accountFallback.ts`), ktorý **zníži na polovicu** uloženú hodnotu
+`failureCount` (`Math.floor(failureCount / 2)`); keď dosiahne hodnotu `0`, záznam zablokovania
+sa úplne odstráni. Náprotivok `recordModelLockoutFailure()`
+zvyšuje počet (a predlžuje čas vychladnutia) pri chybách v rámci
+eskalačného intervalu. Tento útlm po úspechu dopĺňa obyčajné uplynutie časovača —
+model môže znova povoliť ktorákoľvek z týchto ciest.
 
-**Stav:** uzamknutia sa uchovávajú **v pamäti** (mapy `Map` pre jednotlivé procesy so záznamami
-`ModelLockoutEntry` indexovanými podľa `provider:connectionId:model`, uzamknutia s presným rozsahom podľa
-`provider:connectionId:exact:model`), nie sú uložené v
-databáze — pri reštarte sa stratia. _Nastavenia_ sa uchovávajú; aktívny
-_stav_ uzamknutí je dočasný.
+**Stav:** zablokovania sa uchovávajú **v pamäti** (`Map` objekty typu
+`ModelLockoutEntry` pre jednotlivé procesy, indexované podľa `provider:connectionId:model`, zablokovania s presným rozsahom podľa
+`provider:connectionId:exact:model`), neuchovávajú sa
+v DB — pri reštarte sa stratia. _Nastavenia_ sa uchovávajú; aktívny
+_stav_ zablokovania je dočasný.
 
 ---
 
-## 4. Riadenie súbežnosti quota-share (v3.8.36)
+## 4. Riadenie súbežnosti zdieľania kvóty (v3.8.36)
 
-Účty s predplatným (GLM, MiniMax atď.) často prijímajú iba ~1–3 súbežné
-požiadavky; prekročenie tohto počtu vyvoláva chyby 429 a doby pozastavenia. Tento problém je výrazný pri
-kombináciách **quota-share** (`qtSd/…`), kde viacero API kľúčov zdieľa jeden nadradený
-účet. Tri vrstvy zabraňujú preťaženiu zdieľaného účtu.
+Účty s predplatným (GLM, MiniMax atď.) často povoľujú iba ~1–3 súbežné požiadavky; prekročenie tohto počtu vyvolá chyby 429 a čakacie lehoty. Tento problém je výrazný pri kombináciách so **zdieľaním kvóty** (`qtSd/…`), kde niekoľko kľúčov API zdieľa jeden nadradený účet. Tri vrstvy zabraňujú zahlteniu zdieľaného účtu.
 
 ### Limit súbežnosti pre pripojenie (`max_concurrent`)
 
-Každé pripojenie poskytovateľa môže deklarovať horný limit `max_concurrent`
-(`provider_connections.max_concurrent`, nastavený v dialógovom okne pripojenia / API / DB).
-Ak nechcete žiadny limit, ponechajte ho prázdny. Toto je jediný parameter, ktorý riadi nižšie uvedenú
-serializačnú vrstvu — nastavte ho na skutočnú súbežnosť účtu (napr. GLM ~1, MiniMax ~2).
+Každé pripojenie poskytovateľa môže deklarovať horný limit `max_concurrent` (`provider_connections.max_concurrent`, nastavený v modálnom okne pripojenia / API / DB). Ak nechcete žiadny limit, ponechajte ho prázdny. Toto je jediný parameter, ktorý riadi nižšie uvedenú serializačnú vrstvu — nastavte ho na skutočnú súbežnosť účtu (napr. GLM ~1, MiniMax ~2).
 
-### Serializácia požiadaviek quota-share
+### Limity súbežnosti pre jednotlivé modely (`modelConcurrency`)
 
-Keď je odoslanie quota-share nasmerované na pripojenie, ktoré deklaruje kladnú hodnotu
-`max_concurrent`, súbežné požiadavky na daný **účet** sa serializujú prostredníctvom
-semaforu pre jednotlivé pripojenia (kľúč `qsconn:<connectionId>`): nadbytočné požiadavky **čakajú vo
-fronte** namiesto toho, aby preťažili účet. Mechanizmus je typu **fail-open** — pri nasýtenom
-fronte alebo uplynutí časového limitu sa pokračuje bez slotu namiesto odmietnutia požiadavky,
-ktorú možno odoslať. Prepína sa v časti **Nastavenia → Odolnosť → Súbežnosť quota-share pre jednotlivé
-pripojenia** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, predvolene
-zapnuté). Bez limitu `max_concurrent` sa správanie nemení.
+Pripojenie môže navyše deklarovať presné limity súbežnosti pre jednotlivé modely vo svojej mape `rateLimitOverrides`:
 
-> Smerovacia brána quota-share (`selectQuotaShareTarget`, DRR + P2C) je sama osebe
-> typu fail-open a pripojeniu na limite iba _znižuje prioritu_ — pri
-> fonde s jediným pripojením nemôže vynútiť pevný limit, takže práve tento semafor
-> skutočne zabraňuje preťaženiu.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### Opakovanie s ohľadom na pozastavenie kombinácie
+Nastavte ich v modálnom okne pripojenia (**Prepísanie limitov frekvencie → Limity súbežnosti pre jednotlivé modely**, jeden záznam `model=cap` na riadok) alebo prostredníctvom `PATCH /api/providers/[id]` s rovnakou štruktúrou JSON. Sémantika kľúčov:
 
-Pri každej stratégii kombinácie (ak je zapnutá) požiadavka, ktorá by spôsobila chybu 429
-pre KRÁTKE prechodné pozastavenie, počká na jeho skončenie a znovu sa odošle namiesto
-vrátenia chyby 429 — to pokrýva okná TPM/RPM triedy Gemini (~60 s podľa retry-after)
-pri kombináciách viacerých modelov, napr. keď oba ciele 2-modelovej kombinácie narazia na limit
-frekvencie pre jednotlivé modely. Obmedzuje sa pomocou `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) v časti **Nastavenia → Odolnosť**. Nikdy nečaká pri stave `quota_exhausted`
-(zamknuté do polnoci) ani pri dôvodoch súvisiacich s autentifikáciou či nenájdením.
+- **Pre celé pripojenie verzus pre konkrétny model:** `maxConcurrent` zostáva zdieľaným limitom pre celé pripojenie. Keď sa uplatňujú oba limity, obe brány sa získajú atomicky v rovnakej zloženej bráne (`global → provider → account → model`); výsledné správanie určuje prísnejší platný limit.
+- **Presná zhoda kľúča modelu:** kľúčom je reťazec modelu odovzdaný vykonávaciemu mechanizmu po vyhodnotení smerovania — zvyčajne samotný identifikátor nadradeného modelu (`glm-5`), nie alias `provider/model` na strane klienta (`zai/glm-5` sa nezhoduje s `glm-5`). Hodnoty predstavujú kladné celočíselné limity súbežných požiadaviek.
+- **Lokálne radenie do frontu, bez zisťovania:** nadbytočné požiadavky sa zaraďujú do lokálneho frontu s existujúcou sémantikou frontu a časového limitu (typované chyby prijatia `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL`). OmniRoute nezisťuje ani neodvodzuje pravidlá nadradenej služby — vynucuje presné limity nakonfigurované prevádzkovateľom. Nasýtená brána modelu nikdy nevypne poskytovateľa ani nevytvorí trvalé zablokovanie modelu; správanie pri chybách 429, čakacích lehotách a záložnom prepnutí nadradenej služby zostáva poslednou poistkou pri chybách.
+- **Rozsah pre pripojenie a proces:** limity platia pre jednotlivé databázové pripojenia a uchovávajú sa v pamäti, takže dve pripojenia používajúce rovnaký kľúč API nadradenej služby sa navzájom nekoordinujú.
+- **Nenakonfigurované znamená bez zmeny:** vynechanie mapy (alebo ponechanie poľa na ovládacom paneli prázdneho) nepridá žiadnu bránu modelu. Príklad konfigurácie bez stanovenia akéhokoľvek univerzálneho limitu poskytovateľa:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Serializácia požiadaviek so zdieľaním kvóty
+
+Keď sa odoslanie so zdieľaním kvóty zameria na pripojenie, ktoré deklaruje kladnú hodnotu `max_concurrent`, súbežné požiadavky na tento **účet** sa serializujú prostredníctvom semafora pre jednotlivé pripojenia (kľúč `qsconn:<connectionId>`): nadbytočné požiadavky **čakajú vo fronte** namiesto toho, aby zahltili účet. Mechanizmus je **fail-open** — pri nasýtenom fronte alebo vypršaní časového limitu pokračuje bez získania slotu, takže nikdy neodmietne požiadavku, ktorú možno odoslať. Funkciu môžete prepnúť v časti **Nastavenia → Odolnosť → Súbežnosť pre pripojenie pri zdieľaní kvóty** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, predvolene zapnuté). Bez limitu `max_concurrent` zostáva správanie nezmenené.
+
+> Brána smerovania pri zdieľaní kvóty (`selectQuotaShareTarget`, DRR + P2C) je sama osebe
+> typu fail-open a pripojeniu na hranici limitu iba _zníži prioritu_ — pri fonde
+> s jediným pripojením nemôže stanoviť pevný limit, takže zahltenie v skutočnosti
+> obmedzuje práve tento semafor.
+
+### Opakovanie zohľadňujúce čakaciu lehotu kombinácie
+
+Pri každej stratégii kombinácie (ak je zapnutá) požiadavka, ktorá by viedla k definitívnemu vráteniu chyby 429 z dôvodu KRÁTKEJ prechodnej čakacej lehoty, počká na jej uplynutie a odošle sa znova namiesto vrátenia chyby 429 — to pokrýva okná TPM/RPM triedy Gemini (~60 s podľa `retry-after`) pri kombináciách viacerých modelov, napr. keď oba ciele kombinácie dvoch modelov narazia na limit frekvencie pre daný model. Správanie je ohraničené nastavením `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) v časti **Nastavenia → Odolnosť**. Nikdy nečaká pri dôvode `quota_exhausted` (uzamknuté do polnoci) ani pri dôvodoch súvisiacich s autentifikáciou či nenájdením.
 
 ---
 

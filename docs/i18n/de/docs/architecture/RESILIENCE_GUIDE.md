@@ -205,127 +205,193 @@ Verwandte Mechanismen bleiben voneinander getrennt:
 
 ## 3. Modellsperre
 
-**Geltungsbereich:** Tupel aus Anbieter + Verbindung + Modell.
+**Gültigkeitsbereich:** Kombination aus Anbieter + Verbindung + Modell.
 
-**Schlüsselbereich nach Status:** Der Fehlerstatus bestimmt, in welchen Schlüssel eine Sperre geschrieben wird
+**Schlüsselbereich nach Status:** Der fehlschlagende Status bestimmt, in welchen Schlüssel eine Sperre geschrieben wird
 (`resolveLockoutScope()` in `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — ein Kontingent- oder Berechtigungssignal — sperren die **Kontingentfamilie**:
-  bei codex den gesamten Geltungsbereich `codex` / `spark` (jedes `gpt-5*`-Modell der
+- `429` / `403` / `402` — ein Kontingent- oder Berechtigungssignal — sperrt die **Kontingentfamilie**:
+  bei Codex den gesamten Bereich `codex` / `spark` (jedes `gpt-5*`-Modell der
   Verbindung), bei anderen Anbietern `getQuotaScopedModelForProvider()`.
-- `404` sperrt nur das konkrete Modell (`getModelLockKey()` grenzt `not_found` ein).
-- Jeder andere Status — `5xx`-Transport-/Serverfehler und der von OmniRoute selbst
-  aufgrund der Qualitätsvalidierung erzeugte `502` — sperrt nur das **exakte**
-  Anbieter-/Verbindungs-/Modell-Tupel. Ein fehlerhafter Stream bei einem Modell ist kein Beleg
-  für ein Problem mit dem Kontingent des Kontos; vor dieser Regel entfernte eine einzige leere Antwort bei
+- `404` sperrt nur das eigentliche Modell (`getModelLockKey()` grenzt `not_found` ein).
+- Jeder andere Status — `5xx`-Transport-/Serverfehler und OmniRoutes eigener,
+  durch Qualitätsvalidierung erzeugter `502`-Status — sperrt ausschließlich die **exakte**
+  Anbieter-/Verbindungs-/Modellkombination. Ein fehlerhafter Stream bei einem Modell ist kein Beleg
+  für das Kontingent des Kontos; vor dieser Regel entfernte eine einzige leere Antwort von
   `codex/gpt-5.6-luna` jedes `gpt-5*`-Modell dieser Verbindung für
-  2–30 min (mit Eskalation) aus dem Routing, obwohl das Kontingent unberührt war.
+  2–30 Min. (mit Eskalation) aus dem Routing, obwohl das Kontingent unangetastet war.
 - Eine explizite `scope`-Option des Aufrufers hat immer Vorrang (Antigravity übergibt `"exact"`).
 
-**Zweck:** Verhindert die Deaktivierung einer gesamten Verbindung, wenn nur ein Modell nicht verfügbar oder kontingentbeschränkt ist.
+**Zweck:** Vermeidung der Deaktivierung einer gesamten Verbindung, wenn nur ein Modell nicht verfügbar oder kontingentbeschränkt ist.
 
 **Beispiele:**
 
-- Anbieter mit Kontingenten pro Modell, die 429 zurückgeben
+- Anbieter mit modellspezifischen Kontingenten, die 429 zurückgeben
 - Lokale Anbieter, die für ein einzelnes fehlendes Modell 404 zurückgeben
-- Anbieterspezifische Modus-/Modellberechtigungsfehler (z. B. Grok-Modi)
+- Anbieterspezifische Berechtigungsfehler für Modi/Modelle (z. B. Grok-Modi)
 
 **Implementierung:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Dashboard für Modellabklingzeiten (v3.8.0)
+### Dashboard für Modell-Abklingzeiten (v3.8.0)
 
-Benutzeroberfläche: Einstellungen → Modellabklingzeiten (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Benutzeroberfläche: Einstellungen → Modell-Abklingzeiten (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
 Listet aktive Sperren mit folgenden Angaben auf: Anbieter, Verbindung, Modell, Grund, expiresAt. Betreiber können ein Modell über die Karte manuell wieder aktivieren.
 
 **REST-API:**
 
 - `GET /api/resilience/model-cooldowns` — aktive Sperren auflisten
-- `DELETE /api/resilience/model-cooldowns` — manuell wieder aktivieren. Body: `{provider, connection, model}`. Authentifizierung: Verwaltung.
+- `DELETE /api/resilience/model-cooldowns` — manuell wieder aktivieren. Textkörper: `{provider, connection, model}`. Authentifizierung: Verwaltung.
+
+### Abklingzeit-Manager
+
+Benutzeroberfläche: Überwachung → Abklingzeit-Manager (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Eine zentrale Seite für jede Verbindung, die aus einem vorübergehenden Grund vom Routing ausgeschlossen ist, anstatt
+jede Anbieterseite einzeln zu öffnen. Sie listet Verbindungs-Abklingzeiten, Modellsperren und endgültige
+Zustände auf, löscht diese pro Verbindung, für eine Auswahl oder für alle Verbindungen eines Anbieters
+und bearbeitet die am häufigsten angepassten Abklingzeitregeln: `streamStallCooldown.enabled` sowie die Basis-Abklingzeit und die maximale Anzahl an Backoff-Schritten von
+`connectionCooldown` für OAuth-/API-Schlüssel-Verbindungen (gespeichert über
+`PATCH /api/resilience`). Endgültige Zustände (`banned`, `expired`, `credits_exhausted`) werden
+aufgelistet, aber hier niemals gelöscht.
+
+**REST-API** (`src/lib/resilience/cooldownManager.ts`, Authentifizierung: Verwaltung):
+
+- `GET /api/resilience/cooldowns[?provider=]` — Verbindungen mit Status, verbleibender Abklingzeit,
+  Backoff-Stufe, letztem Fehlertyp und Modellsperren (keine Anmeldedaten)
+- `POST /api/resilience/cooldowns` — Textkörper `{connectionIds: string[]}` oder
+  `{all: true, provider?}`; gibt `{cleared, unchanged, skippedTerminal, lockoutsCleared}` zurück
 
 ### Benutzeroberfläche für Sperreinstellungen + Wiederherstellung durch Erfolgsabnahme (v3.8.23)
 
-Die Modellsperre wurde von einem stets aktiven, fest codierten Verhalten zu einer vollständig konfigurierbaren,
-explizit zu aktivierenden Funktion mit eigener Einstellungskarte und einem selbstheilenden Wiederherstellungspfad.
+Die Modellsperre wurde von einem stets aktiven, fest codierten Verhalten zu einer vollständig konfigurierbaren
+Opt-in-Funktion mit eigener Einstellungskarte und einem selbstheilenden Wiederherstellungspfad.
 
 **Einstellungskarte:** Einstellungen → Modellsperre
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Diese unterscheidet sich von der oben genannten schreibgeschützten `ModelCooldownsCard` (die aktive Sperren nur
-_auflistet_) — die neue Karte _konfiguriert die Parameter_. Die Standardwerte
+Diese unterscheidet sich von der oben beschriebenen schreibgeschützten `ModelCooldownsCard` (die aktive Sperren nur
+_auflistet_) — die neue Karte _konfiguriert die Parameter_. Standardwerte
 befinden sich in `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Einstellung             | Standardwert                     | Bedeutung                                                            |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Hauptschalter — die Modellsperre ist **standardmäßig deaktiviert**.  |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Upstream-Statuscodes, die als modellspezifischer Fehler zählen.      |
-| `baseCooldownMs`        | `120_000` (120 s)                | Anfängliche Sperrdauer für den ersten Fehler.                        |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Obergrenze für die eskalierte Abklingzeit.                           |
-| `maxBackoffSteps`       | `10`                             | Maximale Anzahl von Eskalationsschritten für exponentielles Backoff. |
-| `useExponentialBackoff` | `true`                           | Ob wiederholte Fehler die Abklingzeit exponentiell erhöhen.          |
+| Einstellung             | Standardwert                     | Bedeutung                                                                |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `enabled`               | `false`                          | Hauptschalter — die Modellsperre ist **standardmäßig deaktiviert**.      |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Upstream-Statuscodes, die als modellspezifischer Fehler zählen.          |
+| `baseCooldownMs`        | `120_000` (120 s)                | Anfängliche Sperrdauer für den ersten Fehler.                            |
+| `maxCooldownMs`         | `1_800_000` (30 Min.)            | Obergrenze für die eskalierte Abklingzeit.                               |
+| `maxBackoffSteps`       | `10`                             | Maximale Anzahl von Eskalationsschritten für den exponentiellen Backoff. |
+| `useExponentialBackoff` | `true`                           | Gibt an, ob wiederholte Fehler die Abklingzeit exponentiell erhöhen.     |
 
 Die Einstellungen werden über den regulären Einstellungsspeicher persistiert und anhand des
-Schemas für Resilienzeinstellungen validiert; die Karte begrenzt `baseCooldownMs`/`maxCooldownMs`
+Schemas für Resilienz-Einstellungen validiert; die Karte begrenzt `baseCooldownMs`/`maxCooldownMs`
 (mit `maxCooldownMs ≥ baseCooldownMs`) und `maxBackoffSteps`.
 
-**Wiederherstellung durch Erfolgsabnahme:** Die Wiederherstellung basiert **nicht** ausschließlich auf dem Ablauf eines Timers. Eine fehlerfreie
+**Wiederherstellung durch Erfolgsabnahme:** Die Wiederherstellung erfolgt **nicht** ausschließlich durch Ablauf des Timers. Eine erfolgreiche
 Antwort reduziert den Fehlerzähler des Modells schrittweise, sodass ein Modell, das sich
-innerhalb des Zeitfensters erholt hat, nicht weiter eskaliert und die Sperre aufgehoben wird, bevor der Timer ablaufen würde. Bei einem erfolgreichen
+innerhalb des Zeitfensters erholt hat, nicht weiter eskaliert wird (und entsperrt wird), bevor sein Timer abgelaufen wäre. Bei einem erfolgreichen
 Kombinationsziel ruft `open-sse/services/combo.ts` die Funktion `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`) auf, die den gespeicherten
-`failureCount` **halbiert** (`Math.floor(failureCount / 2)`); sobald er `0` erreicht,
-wird der Sperreintrag vollständig gelöscht. Das Gegenstück `recordModelLockoutFailure()`
-erhöht den Zähler bei Fehlern innerhalb des Eskalationsfensters (und eskaliert die Abklingzeit).
-Diese Erfolgsabnahme ergänzt den normalen Ablauf des Timers —
+`failureCount` **halbiert** (`Math.floor(failureCount / 2)`); sobald er `0` erreicht, wird der Sperreintrag
+vollständig gelöscht. Das Gegenstück `recordModelLockoutFailure()`
+erhöht bei Fehlern innerhalb des Eskalationsfensters den Zähler (und eskaliert die Abklingzeit).
+Diese Erfolgsabnahme ergänzt den einfachen Ablauf des Timers —
 beide Wege können ein Modell wieder aktivieren.
 
-**Status:** Sperren werden **im Arbeitsspeicher** gehalten (prozessbezogene `Map`s von
-`ModelLockoutEntry`, verschlüsselt nach `provider:connectionId:model`; Sperren mit exaktem Geltungsbereich nach
+**Zustand:** Sperren werden **im Arbeitsspeicher** gehalten (prozessspezifische `Map`s von
+`ModelLockoutEntry`, verschlüsselt nach `provider:connectionId:model`; Sperren mit exaktem Gültigkeitsbereich nach
 `provider:connectionId:exact:model`) und nicht in
-der DB persistiert — sie gehen bei einem Neustart verloren. Die _Einstellungen_ werden persistiert; der aktive
-_Sperrstatus_ ist flüchtig.
+der Datenbank persistiert — bei einem Neustart gehen sie verloren. Die _Einstellungen_ werden persistiert; der aktive
+_Sperrzustand_ ist flüchtig.
 
 ---
 
-## 4. Parallelitätssteuerung für Quota-Share (v3.8.36)
+## 4. Quota-Share-Parallelitätssteuerung (v3.8.36)
 
-Abonnementkonten (GLM, MiniMax usw.) akzeptieren häufig nur etwa 1–3 gleichzeitige
-Anfragen; wird diese Anzahl überschritten, führt dies zu 429-Antworten und Abklingzeiten. Besonders ausgeprägt ist dies bei
-**Quota-Share**-Kombinationen (`qtSd/…`), bei denen sich mehrere API-Schlüssel ein gemeinsames Upstream-Konto
-teilen. Drei Ebenen verhindern, dass ein gemeinsam genutztes Konto mit Anfragen überflutet wird.
+Abonnementkonten (GLM, MiniMax usw.) akzeptieren häufig nur ~1–3 gleichzeitige
+Anfragen; wird diese Anzahl überschritten, führt dies zu 429-Fehlern und Abklingzeiten. Dies ist besonders problematisch bei
+**quota-share**-Kombinationen (`qtSd/…`), bei denen sich mehrere API-Schlüssel ein vorgelagertes
+Konto teilen. Drei Ebenen verhindern, dass ein gemeinsam genutztes Konto überlastet wird.
 
 ### Parallelitätsobergrenze pro Verbindung (`max_concurrent`)
 
 Für jede Provider-Verbindung kann eine `max_concurrent`-Obergrenze festgelegt werden
-(`provider_connections.max_concurrent`, konfigurierbar im Verbindungsdialog / über die API / in der DB).
-Lassen Sie das Feld leer, um keine Begrenzung anzuwenden. Dies ist die zentrale Einstellung für die nachfolgende
-Serialisierungsebene — setzen Sie sie auf die tatsächliche Parallelität des Kontos (z. B. GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`, festgelegt im Verbindungsdialog / über die API / in der DB).
+Lassen Sie den Wert leer, um keine Begrenzung anzuwenden. Dies ist der zentrale Parameter für die nachfolgende
+Serialisierungsebene — setzen Sie ihn auf die tatsächliche Parallelität des Kontos (z. B. GLM ~1, MiniMax ~2).
+
+### Parallelitätsobergrenzen pro Modell (`modelConcurrency`)
+
+Für eine Verbindung können zusätzlich exakte Parallelitätsobergrenzen pro Modell
+innerhalb ihrer `rateLimitOverrides`-Zuordnung festgelegt werden:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Legen Sie sie im Verbindungsdialog (**Ratenlimitüberschreibungen → Parallelitätsobergrenzen
+pro Modell**, ein `model=cap` pro Zeile) oder über
+`PATCH /api/providers/[id]` mit derselben JSON-Struktur fest. Semantik der Schlüssel:
+
+- **Verbindungsweit gegenüber modellspezifisch:** `maxConcurrent` bleibt die gemeinsam genutzte,
+  verbindungsweite Obergrenze. Wenn beide gelten, werden beide Sperren
+  atomar in derselben zusammengesetzten Sperre belegt
+  (`global → provider → account → model`); effektiv gilt die
+  strengere anwendbare Begrenzung.
+- **Exakte Übereinstimmung des Modellschlüssels:** Der Schlüssel ist die Modellzeichenfolge, die nach der
+  Routing-Auflösung an den Executor übergeben wird — normalerweise die reine vorgelagerte Modell-ID
+  (`glm-5`), nicht ein clientseitiger `provider/model`-Alias (`zai/glm-5` stimmt nicht mit
+  `glm-5` überein). Werte sind positive ganzzahlige Obergrenzen für gleichzeitige Anfragen.
+- **Lokale Warteschlange, keine Erkennung:** Überschüssige Anfragen werden lokal gemäß der
+  bestehenden Warteschlangen-/Zeitüberschreitungssemantik eingereiht (typisierte Zulassungsfehler
+  `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL`). OmniRoute erkennt oder
+  erschließt die vorgelagerte Richtlinie nicht — es setzt exakt die vom Betreiber
+  konfigurierten Obergrenzen durch. Eine ausgelastete Modellsperre deaktiviert den Provider niemals und
+  erzeugt keine permanente Modellsperrung; das vorgelagerte Verhalten für
+  429-Fehler/Abklingzeiten/Fallbacks bleibt die letzte Fehlerabsicherung.
+- **Geltungsbereich pro Verbindung und Prozess:** Obergrenzen gelten pro Datenbankverbindung
+  und werden im Arbeitsspeicher gehalten. Daher koordinieren sich zwei Verbindungen, die denselben vorgelagerten API-Schlüssel
+  wiederverwenden, nicht miteinander.
+- **Nicht konfiguriert bedeutet unverändert:** Wird die Zuordnung weggelassen (oder das
+  Dashboard-Feld leer gelassen), wird keine Modellsperre hinzugefügt. Beispielkonfiguration, ohne
+  eine universelle Provider-Begrenzung vorauszusetzen:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Serialisierung von Quota-Share-Anfragen
 
-Wenn ein Quota-Share-Dispatch auf eine Verbindung abzielt, für die ein positiver
-`max_concurrent`-Wert festgelegt ist, werden gleichzeitige Anfragen an dieses **Konto** über ein
+Wenn ein Quota-Share-Dispatch auf eine Verbindung abzielt, die einen positiven
+`max_concurrent`-Wert deklariert, werden gleichzeitige Anfragen an dieses **Konto** über ein
 verbindungsspezifisches Semaphor serialisiert (Schlüssel `qsconn:<connectionId>`): Überschüssige Anfragen **warten in
-der Warteschlange**, statt das Konto zu überfluten. Das Verhalten ist **Fail-Open** — bei einer ausgelasteten
-Warteschlange oder einer Zeitüberschreitung wird ohne Slot fortgefahren, statt jemals eine weiterleitbare
+der Warteschlange**, anstatt das Konto zu überlasten. Das Verhalten ist **fail-open** — bei einer ausgelasteten
+Warteschlange oder einer Zeitüberschreitung wird ohne Slot fortgefahren, anstatt jemals eine zustellbare
 Anfrage abzulehnen. Umschaltbar unter **Einstellungen → Resilienz → Quota-Share-Parallelität
 pro Verbindung** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standardmäßig
-aktiviert). Ohne `max_concurrent`-Obergrenze bleibt das Verhalten unverändert.
+aktiviert). Ohne eine `max_concurrent`-Obergrenze bleibt das Verhalten unverändert.
 
-> Das Quota-Share-Routing-Gate (`selectQuotaShareTarget`, DRR + P2C) ist selbst
-> Fail-Open und _depriorisiert_ eine Verbindung an ihrer Kapazitätsgrenze lediglich — bei einem
-> Pool mit nur einer Verbindung kann es keine harte Begrenzung durchsetzen; daher ist dieses Semaphor der Mechanismus, der die
-> Überflutung tatsächlich eindämmt.
+> Die Quota-Share-Routing-Sperre (`selectQuotaShareTarget`, DRR + P2C) ist selbst
+> fail-open und stuft eine Verbindung an ihrer Kapazitätsgrenze lediglich _niedriger ein_ — bei einem
+> Pool mit nur einer Verbindung kann sie keine harte Begrenzung durchsetzen; dieses Semaphor begrenzt daher tatsächlich
+> die Anfragenflut.
 
-### Abklingzeitbewusste Wiederholung für Kombinationen
+### Abklingzeitbewusste Wiederholungsversuche für Kombinationen
 
-Bei jeder Kombinationsstrategie wartet eine Anfrage, sofern aktiviert, eine KURZE vorübergehende Abklingzeit ab, die andernfalls zu einer endgültigen 429-Antwort führen würde,
-und wird anschließend erneut weitergeleitet, statt die 429-Antwort
-zurückzugeben — dies deckt TPM-/RPM-Zeitfenster der Gemini-Klasse ab (~60 s `retry-after`)
-bei Kombinationen aus mehreren Modellen, beispielsweise wenn beide Ziele einer Kombination aus zwei Modellen
-ein modellspezifisches Ratenlimit erreichen. Begrenzt durch `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) unter **Einstellungen → Resilienz**. Bei `quota_exhausted`
-(bis Mitternacht gesperrt) oder Authentifizierungs-/Nicht-gefunden-Gründen wird niemals gewartet.
+Bei jeder Kombinationsstrategie (sofern aktiviert) wartet eine Anfrage, die andernfalls einen 429-Fehler
+aufgrund einer KURZEN vorübergehenden Abklingzeit verfestigen würde, diese ab und wird erneut
+weitergeleitet, anstatt den 429-Fehler zurückzugeben — dies deckt TPM-/RPM-Fenster der Gemini-Klasse
+(~60 s `retry-after`) bei Kombinationen aus mehreren Modellen ab, z. B. wenn beide Ziele einer Kombination
+aus zwei Modellen auf ein Ratenlimit pro Modell treffen. Begrenzt durch `comboCooldownWait`
+(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) unter **Einstellungen → Resilienz**.
+Bei `quota_exhausted` (bis Mitternacht gesperrt) oder Gründen im Zusammenhang mit Authentifizierung bzw.
+Nichtgefunden-Fehlern wird niemals gewartet.
 
 ---
 

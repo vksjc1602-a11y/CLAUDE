@@ -212,128 +212,153 @@ Seotud mehhanismid jäävad eraldiseisvaks:
 
 ## 3. Mudeli lukustus
 
-**Ulatus:** pakkuja + ühendus + mudel kolmik.
+**Ulatus:** teenusepakkuja + ühenduse + mudeli kolmik.
 
-**Võtme ulatus oleku järgi:** nurjunud olek määrab, millisele võtmele lukustus
+**Võtme ulatus oleku järgi:** tõrkeolek määrab, millisele võtmele lukustus
 kirjutatakse (`resolveLockoutScope()` failis `open-sse/services/accountFallback/exactModelLock.ts`):
 
 - `429` / `403` / `402` — kvoodi- või kasutusõiguse signaal — lukustab **kvoodipere**:
   codexi puhul kogu `codex` / `spark` ulatuse (ühenduse iga `gpt-5*` mudeli),
-  teiste pakkujate puhul `getQuotaScopedModelForProvider()`.
-- `404` lukustab üksnes mudeli (`getModelLockKey()` kitsendab olekut `not_found`).
+  teiste teenusepakkujate puhul `getQuotaScopedModelForProvider()`.
+- `404` lukustab ainult mudeli (`getModelLockKey()` kitsendab olekut `not_found`).
 - Mis tahes muu olek — `5xx` transpordi-/serveritõrked ja OmniRoute'i enda
-  kvaliteedikontrolli loodud `502` — lukustab ainult **täpse**
-  pakkuja/ühenduse/mudeli kolmiku. Ühe mudeli vigane voog ei tõenda midagi
+  kvaliteedikontrollist sünteesitud `502` — lukustab ainult **täpse**
+  teenusepakkuja/ühenduse/mudeli kolmiku. Ühe mudeli vigane voog ei tõenda midagi
   konto kvoodi kohta; enne seda reeglit eemaldas üks tühi vastus mudelilt
   `codex/gpt-5.6-luna` marsruutimisest 2–30 minutiks (eskaleeruvalt) kõik selle
-  ühenduse `gpt-5*` mudelid, kuigi selle kvoot jäi puutumata.
-- Kutsuja sõnaselge suvand `scope` on alati ülimuslik (Antigravity edastab `"exact"`).
+  ühenduse `gpt-5*` mudelid, kuigi kvoot jäi puutumata.
+- Kutsuja sõnaselgelt määratud suvand `scope` on alati ülimuslik (Antigravity edastab `"exact"`).
 
 **Eesmärk:** vältida terve ühenduse keelamist, kui saadaval pole või kvoodipiiranguga on ainult üks mudel.
 
 **Näited:**
 
-- Mudelipõhise kvoodiga pakkujad, kes tagastavad 429
-- Kohalikud pakkujad, kes tagastavad ühe puuduva mudeli puhul 404
-- Pakkujapõhised režiimi-/mudeliloa tõrked (nt Groki režiimid)
+- Mudelipõhise kvoodiga teenusepakkujad, kes tagastavad 429
+- Kohalikud teenusepakkujad, kes tagastavad ühe puuduva mudeli puhul 404
+- Teenusepakkujapõhised režiimi-/mudelilubade tõrked (nt Groki režiimid)
 
 **Teostus:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Mudelite jahtumiste töölaud (v3.8.0)
+### Mudelite jahtumisperioodide töölaud (v3.8.0)
 
-Kasutajaliides: Seaded → Mudelite jahtumised (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Kasutajaliides: Seaded → Mudelite jahtumisperioodid (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Loetleb aktiivsed lukustused koos järgmiste andmetega: pakkuja, ühendus, mudel, põhjus, aegumisaeg. Operaatorid saavad kaardilt mudeli käsitsi uuesti lubada.
+Loetleb aktiivsed lukustused koos järgmiste andmetega: teenusepakkuja, ühendus, mudel, põhjus, expiresAt. Operaatorid saavad mudeli kaardilt käsitsi uuesti lubada.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — loetleb aktiivsed lukustused
+- `GET /api/resilience/model-cooldowns` — aktiivsete lukustuste loend
 - `DELETE /api/resilience/model-cooldowns` — käsitsi uuesti lubamine. Keha: `{provider, connection, model}`. Autentimine: haldus.
 
-### Lukustusseadete kasutajaliides + eduka töö põhine taastumine (v3.8.23)
+### Jahtumisperioodide haldur
 
-Mudeli lukustus muutus alati aktiivsest püsikodeeritud käitumisest täielikult seadistatavaks,
-eraldi lubatavaks funktsiooniks, millel on oma seadete kaart ja isetaastuv taastetee.
+Kasutajaliides: Seire → Jahtumisperioodide haldur (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Üks leht iga ühenduse jaoks, mis on ajutisel põhjusel marsruutimisest väljas, selle asemel et
+avada iga teenusepakkuja leht eraldi. Seal loetletakse ühenduste jahtumisperioodid, mudelite lukustused ja lõppolekud,
+neid saab kustutada ühenduse, valiku või teenusepakkuja kõigi ühenduste kaupa
+ning muuta enim häälestatavaid jahtumisperioodi reegleid: `streamStallCooldown.enabled` ja OAuthi / API-võtme
+`connectionCooldown` baastaseme jahtumisperioodi ning maksimaalset tagasitaandumissammude arvu (salvestatakse päringuga
+`PATCH /api/resilience`). Lõppolekud (`banned`, `expired`, `credits_exhausted`) on
+loetletud, kuid neid ei kustutata siin kunagi.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autentimine: haldus):
+
+- `GET /api/resilience/cooldowns[?provider=]` — ühendused koos oleku, allesjäänud jahtumisperioodi,
+  tagasitaandumistaseme, viimase tõrketüübi ja mudelilukustustega (ilma identimisteabeta)
+- `POST /api/resilience/cooldowns` — keha `{connectionIds: string[]}` või
+  `{all: true, provider?}`; tagastab `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Lukustuse seadete kasutajaliides + eduka kasutuse põhine hääbumistaaste (v3.8.23)
+
+Mudeli lukustus muutus alati sisse lülitatud jäigalt kodeeritud käitumisest täielikult seadistatavaks,
+sisselülitamist nõudvaks funktsiooniks, millel on oma seadete kaart ja isetaastuv taasteviis.
 
 **Seadete kaart:** Seaded → Mudeli lukustus
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
 See **erineb** ülaltoodud kirjutuskaitstud kaardist `ModelCooldownsCard` (mis ainult
 _loetleb_ aktiivseid lukustusi) — uus kaart _seadistab parameetreid_. Vaikeväärtused
-asuvad muutujas `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+asuvad konstandis `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Seadistus               | Vaikeväärtus                     | Tähendus                                                        |
-| ----------------------- | -------------------------------- | --------------------------------------------------------------- |
-| `enabled`               | `false`                          | Pealüliti — mudeli lukustus on **vaikimisi välja lülitatud**.   |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Ülesvoolu olekud, mida loetakse mudelipõhiseks tõrkeks.         |
-| `baseCooldownMs`        | `120_000` (120 s)                | Esimese tõrke esialgne lukustuse kestus.                        |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Eskaleeritud jahtumisaja ülempiir.                              |
-| `maxBackoffSteps`       | `10`                             | Eksponentsiaalse taganemise eskalatsioonisammude maksimumarv.   |
-| `useExponentialBackoff` | `true`                           | Kas korduvad tõrked pikendavad jahtumisaega eksponentsiaalselt. |
+| Seade                   | Vaikeväärtus                     | Tähendus                                                              |
+| ----------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Pealüliti — mudeli lukustus on **vaikimisi välja lülitatud**.         |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Ülesvoolu olekukoodid, mida loetakse mudelipõhiseks tõrkeks.          |
+| `baseCooldownMs`        | `120_000` (120 s)                | Esimese tõrke lukustuse algne kestus.                                 |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Eskaleeritud jahtumisperioodi ülempiir.                               |
+| `maxBackoffSteps`       | `10`                             | Eksponentsiaalse tagasitaandumise eskaleerimise maksimumsammud.       |
+| `useExponentialBackoff` | `true`                           | Kas korduvad tõrked eskaleerivad jahtumisperioodi eksponentsiaalselt. |
 
 Seaded säilitatakse tavapärases seadete hoidlas ja valideeritakse
-töökindlusseadete skeemi kaudu; kaart piirab väärtusi `baseCooldownMs`/`maxCooldownMs`
+töökindluse seadete skeemi kaudu; kaart piirab väärtusi `baseCooldownMs`/`maxCooldownMs`
 (kus `maxCooldownMs ≥ baseCooldownMs`) ja `maxBackoffSteps`.
 
-**Eduka töö põhine taastumine:** taastumine **ei** põhine üksnes taimeri aegumisel. Korras
-vastus vähendab mudeli tõrkearvu, nii et taastusperioodi keskel taastunud mudeli
-eskalatsioon peatub (ja lukustus eemaldatakse) enne taimeri aegumist. Kombineeritud
-sihtmärgi eduka vastuse korral kutsub `open-sse/services/combo.ts` funktsiooni `decayModelFailureCount()`
+**Eduka kasutuse põhine hääbumistaaste:** taastamine **ei** põhine üksnes taimeri aegumisel. Korras
+vastus vähendab järk-järgult mudeli tõrkeloendurit, et keset ajavahemikku taastunud
+mudeli tõrked ei eskaleeruks edasi (ja lukustus eemaldataks) enne taimeri aegumist. Kombineeritud sihtmärgi
+eduka vastuse korral kutsub `open-sse/services/combo.ts` funktsiooni `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), mis **poolitab** salvestatud
 `failureCount` väärtuse (`Math.floor(failureCount / 2)`); kui see jõuab väärtuseni `0`, kustutatakse lukustuskirje
-täielikult. Vastandfunktsioon `recordModelLockoutFailure()`
-suurendab eskalatsiooniakna jooksul tekkinud tõrgete korral loendurit (ja pikendab jahtumisaega).
-See eduka töö põhine taastumine täiendab tavalist taimeri aegumist —
-mudeli võib uuesti lubada kumbki tee.
+täielikult. Paarisfunktsioon `recordModelLockoutFailure()`
+suurendab eskaleerimisakna jooksul ilmnevate tõrgete korral loendurit (ja eskaleerib jahtumisperioodi).
+See eduka kasutuse põhine hääbumine täiendab tavalist taimeri aegumist —
+kumbki viis võib mudeli uuesti lubada.
 
-**Olek:** lukustusi hoitakse **mälus** (protsessipõhistes `Map`-ides, mis sisaldavad
-`ModelLockoutEntry` kirjeid võtmega `provider:connectionId:model`; täpse ulatusega lukustuste võtmed on
-`provider:connectionId:exact:model`), neid ei säilitata
-andmebaasis — taaskäivitamisel lähevad need kaotsi. _Seaded_ säilitatakse; aktiivne
+**Olek:** lukustusi hoitakse **mälus** (protsessipõhised `Map`-id
+kirjetest `ModelLockoutEntry`, mille võtmeks on `provider:connectionId:model`, täpse ulatusega lukustuste võtmeks
+`provider:connectionId:exact:model`), neid ei salvestata
+andmebaasi — taaskäivitamisel lähevad need kaotsi. _Seaded_ salvestatakse püsivalt; aktiivne
 lukustuse _olek_ on ajutine.
 
 ---
 
-## 4. Kvoodijagamise samaaegsuse juhtimine (v3.8.36)
+## 4. Quota-share'i samaaegsuse juhtimine (v3.8.36)
 
-Tellimuskontod (GLM, MiniMax jne) aktsepteerivad sageli ainult ~1–3 samaaegset
-päringut; selle piiri ületamine põhjustab 429-vastuseid ja ooteperioode. See probleem on eriti terav
-**kvoodijagamise** (`qtSd/…`) kombinatsioonide korral, kus mitu API-võtit jagavad ühte ülesvoolu
-kontot. Kolm kihti takistavad jagatud konto päringutega ülekoormamist.
+Tellimuskontod (GLM, MiniMax jne) lubavad sageli ainult ~1–3 samaaegset päringut; selle piiri ületamine põhjustab 429 vastuseid ja ooteaegu. See probleem on eriti terav **quota-share'i** (`qtSd/…`) kombinatsioonide puhul, kus mitu API-võtit jagavad üht ülesvoolukontot. Kolm kihti takistavad jagatud konto päringutega ülekoormamist.
 
-### Ühendusepõhine samaaegsuse piirang (`max_concurrent`)
+### Ühendusepõhine samaaegsuse ülempiir (`max_concurrent`)
 
-Iga teenusepakkuja ühendus saab määrata `max_concurrent` ülempiiri
-(`provider_connections.max_concurrent`, seadistatav ühenduse modaalaknas / API-s / andmebaasis).
-Piirangu puudumiseks jätke see tühjaks. See on ainus parameeter, mis juhib allpool kirjeldatud
-serialiseerimiskihti — määrake selle väärtuseks konto tegelik samaaegsuse piir (nt GLM ~1, MiniMax ~2).
+Iga teenusepakkuja ühendus saab määrata `max_concurrent` ülempiiri (`provider_connections.max_concurrent`, seadistatav ühenduse dialoogis / API-s / andmebaasis). Piirangu puudumiseks jätke see tühjaks. See on ainus seadistus, mis juhib allpool kirjeldatud jadastamiskihti — määrake selle väärtuseks konto tegelik samaaegsuse piir (nt GLM ~1, MiniMax ~2).
 
-### Kvoodijagamise päringute serialiseerimine
+### Mudelipõhised samaaegsuse ülempiirid (`modelConcurrency`)
 
-Kui kvoodijagamise kaudu suunatakse päring ühendusele, millel on määratud positiivne
-`max_concurrent`, serialiseeritakse sellele **kontole** tehtavad samaaegsed päringud
-ühendusepõhise semafori kaudu (võti `qsconn:<connectionId>`): üleliigsed päringud **ootavad
-järjekorras**, selle asemel et kontot üle koormata. Süsteem on **tõrke korral avatud** — täitunud
-järjekorra või ajalõpu korral jätkatakse ilma kohata, selle asemel et suunamiskõlblik
-päring kunagi tagasi lükata. Lüliti asub jaotises **Settings → Resilience → Quota-share per-connection
-concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, vaikimisi
-sees). Ilma `max_concurrent` piiranguta käitumine ei muutu.
+Ühendus saab oma `rateLimitOverrides` vastenduses lisaks määrata täpsed mudelipõhised samaaegsuse ülempiirid:
 
-> Kvoodijagamise suunamislüüs (`selectQuotaShareTarget`, DRR + P2C) on ka ise
-> tõrke korral avatud ning ainult _vähendab prioriteeti_ piiri saavutanud ühendusel —
-> ühe ühendusega kogumis ei saa see ranget piirangut rakendada, seega just see semafor
-> hoiab päringutulva kontrolli all.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### Kombinatsiooni ooteperioodi arvestav korduskatse
+Seadistage see ühenduse dialoogis (**Kiiruspiirangu alistused → Mudelipõhised samaaegsuse ülempiirid**, üks `model=cap` rea kohta) või päringuga `PATCH /api/providers/[id]`, kasutades sama JSON-struktuuri. Võtmete semantika:
 
-Iga kombinatsioonistrateegia puhul (kui see on lubatud) ootab päring, mis muidu
-muudaks LÜHIKESE ajutise ooteperioodi 429-vastuseks, ooteperioodi lõpuni ja suunatakse
-429-vastuse tagastamise asemel uuesti — see hõlmab Gemini-klassi TPM/RPM-i ajavahemikke
-(~60 s `retry-after`) mitme mudeliga kombinatsioonides, näiteks kui 2 mudeliga kombinatsiooni
-mõlemad sihtmärgid jõuavad mudelipõhise kiirusepiiranguni. Seda piirab
-`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) jaotises
-**Settings → Resilience**. Süsteem ei oota kunagi põhjuse `quota_exhausted`
-(keskööni lukustatud) ega autentimis-/puudumisvigade korral.
+- **Ühenduseülene vs mudelipõhine:** `maxConcurrent` jääb jagatud ühenduseüleseks ülempiiriks. Kui rakenduvad mõlemad, hõivatakse mõlemad tõkked atomaarselt samas liittõkkes (`global → provider → account → model`); tegeliku käitumise määrab rangem rakenduv piirang.
+- **Täpne mudelivõtme vaste:** võti on mudelistring, mis edastatakse täiturile pärast marsruutimise lahendamist — tavaliselt ülesvoolu mudeli lihtidentifikaator (`glm-5`), mitte kliendipoolne `provider/model` alias (`zai/glm-5` ei vasta väärtusele `glm-5`). Väärtused on positiivsed täisarvulised samaaegsete päringute ülempiirid.
+- **Kohalik järjekord, tuvastamist ei toimu:** üleliigsed päringud jäävad olemasolevate järjekorra- ja ajalõpusemantikate alusel kohalikku järjekorda (tüübitud vastuvõtuvead `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL`). OmniRoute ei tuvasta ega tuleta ülesvoolu reegleid — see jõustab täpselt operaatori seadistatud ülempiirid. Täitunud mudelitõke ei keela kunagi teenusepakkujat ega tekita püsivat mudelilukustust; ülesvoolu 429/ooteaja/varuvariandi käitumine jääb vigade viimaseks kaitsekihiks.
+- **Ühenduse- ja protsessipõhine ulatus:** ülempiirid kehtivad iga andmebaasiühenduse kohta ning neid hoitakse mälus, mistõttu kaks sama ülesvoolu API-võtit kasutavat ühendust ei koordineeri omavahel.
+- **Seadistamata tähendab muutusteta:** vastenduse väljajätmine (või juhtpaneeli välja tühjaks jätmine) ei lisa mudelitõket. Näidiskonfiguratsioon ilma universaalset teenusepakkuja piirangut eeldamata:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Quota-share'i päringute jadastamine
+
+Kui quota-share'i edastus sihib ühendust, mis määrab positiivse `max_concurrent` väärtuse, jadastatakse selle **konto** samaaegsed päringud ühendusepõhise semafori kaudu (võti `qsconn:<connectionId>`): üleliigsed päringud **ootavad järjekorras**, selle asemel et kontot üle koormata. See on **fail-open**-põhimõttega — täitunud järjekorra või ajalõpu korral jätkatakse ilma pesata, selle asemel et edastamiseks sobiv päring tagasi lükata. Lüliti asub jaotises **Seaded → Vastupidavus → Quota-share'i ühendusepõhine samaaegsuse piirang** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, vaikimisi sisse lülitatud). Ilma `max_concurrent` ülempiirita jääb käitumine muutumatuks.
+
+> Quota-share'i marsruutimistõke (`selectQuotaShareTarget`, DRR + P2C) toimib ise
+> fail-open-põhimõttel ja ainult _vähendab_ ülempiirini jõudnud ühenduse prioriteeti —
+> ühe ühendusega kogumi puhul ei saa see ranget piirangut kehtestada, seega ohjeldab
+> tegelikku päringutulva just see semafor.
+
+### Kombinatsiooni ooteajateadlik korduskatse
+
+Iga kombinatsioonistrateegia puhul (kui see on lubatud) ootab päring, mis muidu kinnistaks 429 vastuse LÜHIKESE ajutise ooteaja tõttu, ooteaja lõpuni ja edastatakse uuesti, selle asemel et 429 tagastada — see hõlmab Gemini-klassi TPM/RPM-i aknaid (~60 s `retry-after`) mitme mudeliga kombinatsioonides, näiteks kui kahe mudeliga kombinatsiooni mõlemad sihtmärgid jõuavad mudelipõhise kiiruspiiranguni. Piirangud määrab `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) jaotises **Seaded → Vastupidavus**. See ei oota kunagi põhjuse `quota_exhausted` (lukustatud keskööni) ega autentimis- või mitteleidmise põhjuste korral.
 
 ---
 

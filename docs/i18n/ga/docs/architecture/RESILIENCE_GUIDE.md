@@ -224,127 +224,191 @@ Fanann meicníochtaí gaolmhara ar leithligh:
 
 ## 3. Frithdhúnadh Samhla
 
-**Raon feidhme:** soláthraí + nasc + samhail mar thriúr.
+**Raon feidhme:** triúr soláthraí + nasc + samhail.
 
-**Raon feidhme na heochrach de réir stádais:** cinneann an stádas teipe cén eochair a scríobhann frithdhúnadh
-chuici (`resolveLockoutScope()` in `open-sse/services/accountFallback/exactModelLock.ts`):
+**Raon feidhme na heochrach de réir stádais:** is é an stádas teipe a chinneann cén eochair a scríobhann frithdhúnadh chuici
+(`resolveLockoutScope()` in `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — comhartha cuóta nó teidlíochta — cuir an **teaghlach cuóta** faoi fhrithdhúnadh:
+- `429` / `403` / `402` — comhartha cuóta nó teidlíochta — cuir an **teaghlach cuóta** faoi ghlas:
   i gcás codex, raon feidhme iomlán `codex` / `spark` (gach samhail `gpt-5*` de chuid an
   naisc); i gcás soláthraithe eile, `getQuotaScopedModelForProvider()`.
-- Cuireann `404` an tsamhail lom faoi fhrithdhúnadh (`getModelLockKey()` a chúngaíonn `not_found`).
-- Aon stádas eile — teipeanna iompair/freastalaí `5xx` agus an `502` sintéisithe de chuid OmniRoute féin
-  ó bhailíochtú cáilíochta — cuireann sé an tuipléad **beacht**
-  soláthraí/nasc/samhail amháin faoi fhrithdhúnadh. Ní fianaise é sruth lochtach ar shamhail amháin
-  maidir le cuóta an chuntais; roimh an riail seo, bhain freagairt fholamh amháin ar
+- Cuireann `404` an tsamhail lom faoi ghlas (`getModelLockKey()` a chaolaíonn `not_found`).
+- Aon stádas eile — teipeanna iompair/freastalaí `5xx` agus an `502` sintéisithe de chuid
+  OmniRoute féin ó bhailíochtú cáilíochta — ní chuireann sé faoi ghlas ach an
+  triúr beacht soláthraí/nasc/samhail. Ní fianaise faoi chuóta an chuntais é
+  drochshruth ar shamhail amháin; roimh an riail seo, bhain freagra folamh amháin ar
   `codex/gpt-5.6-luna` gach samhail `gpt-5*` den nasc sin den
-  ródú ar feadh 2–30 nóiméad (ag dul i méid), cé nach raibh aon athrú ar a chuóta.
-- Bíonn tosaíocht i gcónaí ag rogha shainráite `scope` an ghlaoiteora (tugann Antigravity `"exact"` ar aghaidh).
+  ródú ar feadh 2–30 nóiméad (ag dul i ngéire), cé nach ndearnadh difear dá chuóta.
+- Bíonn tosaíocht i gcónaí ag rogha shainráite `scope` an ghlaoiteora (tugann Antigravity `"exact"`).
 
-**Cuspóir:** seachain nasc iomlán a dhíchumasú nuair nach bhfuil ach samhail amháin ar fáil nó nuair atá srian cuóta uirthi.
+**Cuspóir:** seachain nasc iomlán a dhíchumasú nuair nach bhfuil ach samhail amháin ar fáil nó nuair atá sí teoranta ag cuóta.
 
 **Samplaí:**
 
-- Soláthraithe cuóta in aghaidh na samhla a thugann 429 ar ais
-- Soláthraithe áitiúla a thugann 404 ar ais do shamhail amháin atá ar iarraidh
-- Teipeanna ceada a bhaineann go sonrach le mód/samhail an tsoláthraí (m.sh., móid Grok)
+- Soláthraithe cuóta in aghaidh na samhla a fhilleann 429
+- Soláthraithe áitiúla a fhilleann 404 i gcás samhail amháin atá ar iarraidh
+- Teipeanna ceada a bhaineann go sonrach le mód/samhail soláthraí (m.sh., móid Grok)
 
 **Cur chun feidhme:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Deais Fhuaruithe Samhla (v3.8.0)
+### Deais Tréimhsí Marbhánta Samhla (v3.8.0)
 
-Comhéadan Úsáideora: Socruithe → Fuaruithe Samhla (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Comhéadan: Socruithe → Tréimhsí Marbhánta Samhla (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Liostaítear frithdhúnuithe gníomhacha mar aon le: soláthraí, nasc, samhail, cúis, expiresAt. Is féidir le hoibreoirí samhail a athchumasú de láimh ón gcárta.
+Liostaítear frithdhúnadh gníomhach mar aon le: soláthraí, nasc, samhail, cúis, expiresAt. Is féidir le hoibreoirí samhail a athchumasú de láimh ón gcárta.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — liostaigh frithdhúnuithe gníomhacha
+- `GET /api/resilience/model-cooldowns` — liostaigh frithdhúnadh gníomhach
 - `DELETE /api/resilience/model-cooldowns` — athchumasú de láimh. Corp: `{provider, connection, model}`. Fíordheimhniú: bainistíocht.
 
-### Comhéadan socruithe frithdhúnaithe + aisghabháil trí mheath ratha (v3.8.23)
+### Bainisteoir Tréimhsí Marbhánta
 
-D'athraigh frithdhúnadh samhla ó iompraíocht chruachódaithe a bhí ar siúl i gcónaí go gné
-lán-inchumraithe, roghnach lena cárta socruithe féin agus conair aisghabhála fhéinleasaitheach.
+Comhéadan: Monatóireacht → Bainisteoir Tréimhsí Marbhánta (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Leathanach amháin do gach nasc atá lasmuigh den ródú ar chúis shealadach, in ionad
+gach leathanach soláthraí a oscailt. Liostaítear ann tréimhsí marbhánta na nasc, frithdhúnadh samhla agus staideanna
+foirceanta; glantar iad de réir naisc, do rogha nasc, nó do gach nasc de chuid soláthraí;
+agus cuirtear na rialacha tréimhse marbhánta is mó mionchoigeartaithe in eagar: `streamStallCooldown.enabled` agus
+buntréimhse mharbhánta `connectionCooldown` OAuth / eochrach API agus uaschéimeanna an chúltaca (sábháilte trí
+`PATCH /api/resilience`). Liostaítear staideanna foirceanta (`banned`, `expired`, `credits_exhausted`) ach
+ní ghlantar anseo choíche iad.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, fíordheimhniú: bainistíocht):
+
+- `GET /api/resilience/cooldowns[?provider=]` — naisc mar aon le stádas, tréimhse mharbhánta atá fágtha,
+  leibhéal cúltaca, cineál na hearráide deireanaí agus frithdhúnadh samhla (gan dintiúir)
+- `POST /api/resilience/cooldowns` — corp `{connectionIds: string[]}` nó
+  `{all: true, provider?}`; filleann sé `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Comhéadan socruithe frithdhúnta + aisghabháil trí mheath ratha (v3.8.23)
+
+D'athraigh frithdhúnadh samhla ó iompar crua-chódaithe a bhí i bhfeidhm i gcónaí go gné lánchumraithe
+roghnach, lena cárta socruithe féin agus conair aisghabhála féinleighis.
 
 **Cárta socruithe:** Socruithe → Frithdhúnadh Samhla
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Tá sé seo **éagsúil** ón `ModelCooldownsCard` inléite amháin thuas (nach ndéanann ach
-frithdhúnuithe gníomhacha a _liostú_) — _cumraíonn an cárta nua na paraiméadair_. Tá na réamhshocruithe
+Tá sé seo **ar leith** ón `ModelCooldownsCard` inléite amháin thuas (nach ndéanann ach
+frithdhúnadh gníomhach a _liostú_) — déanann an cárta nua _na paraiméadair a chumrú_. Tá na réamhshocruithe
 in `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Socrú                   | Réamhshocrú                      | Brí                                                                              |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Máistirlasc — tá frithdhúnadh samhla **múchta de réir réamhshocraithe**.         |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stádais réamhtheachtacha a áirítear mar theip a bhaineann go sonrach le samhail. |
-| `baseCooldownMs`        | `120_000` (120 s)                | Fad tosaigh an fhrithdhúnta don chéad teip.                                      |
-| `maxCooldownMs`         | `1_800_000` (30 nóim)            | Uasteorainn don fhuarú méadaithe.                                                |
-| `maxBackoffSteps`       | `10`                             | Uaslíon céimeanna méadaithe cúlscoir easpónantúil.                               |
-| `useExponentialBackoff` | `true`                           | An méadaíonn teipeanna arís agus arís eile an fuarú go heaspónantúil.            |
+| Socrú                   | Réamhshocrú                      | Brí                                                                                        |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `enabled`               | `false`                          | Máistirlasc — tá frithdhúnadh samhla **as de réir réamhshocraithe**.                       |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Staideanna réamhtheachtacha a áirítear mar theip a bhaineann le samhail.                   |
+| `baseCooldownMs`        | `120_000` (120 s)                | Fad tosaigh an fhrithdhúnta don chéad teip.                                                |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Uasteorainn na tréimhse marbhánta méadaithe.                                               |
+| `maxBackoffSteps`       | `10`                             | Uaslíon céimeanna méadaithe an chúltaca easpónantúil.                                      |
+| `useExponentialBackoff` | `true`                           | Cé acu a mhéadaíonn teipeanna arís agus arís eile an tréimhse mharbhánta go heaspónantúil. |
 
-Coinnítear na socruithe tríd an ngnáthstór socruithe agus bailíochtaítear iad trí
+Maireann na socruithe tríd an ngnáthstór socruithe agus déantar iad a bhailíochtú trí
 scéimre na socruithe athléimneachta; cuireann an cárta teorainneacha ar `baseCooldownMs`/`maxCooldownMs`
-(le `maxCooldownMs ≥ baseCooldownMs`) agus ar `maxBackoffSteps`.
+(le `maxCooldownMs ≥ baseCooldownMs`) agus `maxBackoffSteps`.
 
-**Aisghabháil trí mheath ratha:** ní hionann an aisghabháil agus dul in éag an amadóra amháin. Laghdaíonn
-freagairt shláintiúil comhaireamh teipeanna na samhla céim ar chéim, ionas go stopfaidh samhail a tháinig chuici féin
-i lár na tréimhse de bheith ag méadú (agus go nglanfar í) sula ndéanfadh a hamadóir amhlaidh. Ar sprioc teaglama rathúil,
-glaonn `open-sse/services/combo.ts` ar `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), a dhéanann an `failureCount` stóráilte a **leathnú**
-(`Math.floor(failureCount / 2)`); nuair a shroicheann sé `0`, scriostar iontráil an fhrithdhúnta
-go hiomlán. Déanann an mhacasamhail `recordModelLockoutFailure()`
-an comhaireamh a incrimintiú (agus an fuarú a mhéadú) i gcás teipeanna laistigh den
-tréimhse mhéadaithe. Tá an meath ratha seo sa bhreis ar dhul in éag simplí an amadóra —
+**Aisghabháil trí mheath ratha:** ní hionann aisghabháil agus dul in éag an amadóra amháin. Laghdaíonn
+freagra sláintiúil comhaireamh teipeanna na samhla céim ar chéim, ionas go stopann samhail a d'aisghabh
+i lár na fuinneoige de bheith ag dul i ngéire (agus go nglantar í) sula ndéanfadh a hamadóir amhlaidh. Ar sprioc teaglama
+rathúil, glaonn `open-sse/services/combo.ts` ar `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), a **leathnaíonn** an `failureCount`
+stóráilte (`Math.floor(failureCount / 2)`); nuair a shroicheann sé `0`, scriostar an iontráil
+frithdhúnta go hiomlán. Méadaíonn an comhpháirtí `recordModelLockoutFailure()`
+an comhaireamh (agus méadaíonn sé an tréimhse mharbhánta) ar theipeanna laistigh den
+fhuinneog mhéadaithe. Tá an meath ratha seo sa bhreis ar ghnáthdhul in éag an amadóra —
 is féidir le ceachtar conair samhail a athchumasú.
 
-**Staid:** coinnítear frithdhúnuithe **sa chuimhne** (`Map`anna in aghaidh an phróisis de
-`ModelLockoutEntry` a bhfuil `provider:connectionId:model` mar eochair orthu, frithdhúnuithe beachtraoin le
-`provider:connectionId:exact:model`), ní choinnítear iad sa
-DB — cailltear iad nuair a atosaítear. Coinnítear na _socruithe_; is staid ghearrshaolach í _staid_ ghníomhach
-an fhrithdhúnta.
+**Staid:** coinnítear frithdhúnadh **sa chuimhne** (`Map`anna de réir próisis de
+`ModelLockoutEntry` a bhfuil `provider:connectionId:model` mar eochair orthu, agus glais bheachta raoin a bhfuil
+`provider:connectionId:exact:model` mar eochair orthu), agus ní bhuantar iad sa
+bhunachar sonraí — cailltear iad ar atosú. Buanstóráiltear na _socruithe_; tá _staid_
+ghníomhach an fhrithdhúnta neamhbhuan.
 
 ---
 
 ## 4. Rialú Comhthráthachta Comhroinnte Cuóta (v3.8.36)
 
-Is minic nach nglacann cuntais síntiúis (GLM, MiniMax, srl.) ach le ~1–3 iarratas
-comhthráthacha; má sháraítear é sin, spreagtar earráidí 429 agus tréimhsí fuaraithe. Bíonn sé seo géar faoi
-chomhcheangail **comhroinnte cuóta** (`qtSd/…`), ina roinneann roinnt eochracha API cuntas amháin
-réamhtheachtach. Cuireann trí shraith cosc ar chuntas comhroinnte a bheith báite.
+Is minic nach nglacann cuntais síntiúis (GLM, MiniMax, etc.) ach le ~1–3 iarratas
+comhthráthacha; má sháraítear é sin, spreagtar 429anna agus tréimhsí fuaraithe. Bíonn sé seo géar faoi
+chomhcheangail **quota-share** (`qtSd/…`), ina gcomhroinneann roinnt eochracha API cuntas
+réamhtheachtach amháin. Coinníonn trí shraith cuntas comhroinnte ó bheith báite.
 
 ### Uasteorainn chomhthráthachta in aghaidh an naisc (`max_concurrent`)
 
 Is féidir le gach nasc soláthraí uasteorainn `max_concurrent` a dhearbhú
-(`provider_connections.max_concurrent`, socraithe i módfhuinneog an naisc / san API / sa DB).
-Fág folamh é mura bhfuil teorainn ag teastáil. Seo é an t-aon rialtán a thiomáineann an tsraith srathaithe
-thíos — socraigh é de réir fhíorchomhthráthacht an chuntais (m.sh. GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`, socraithe i mód-dialóg an naisc / API / DB).
+Fág folamh é mura dteastaíonn teorainn. Is é seo an t-aon rialtán amháin a stiúrann an tsraith
+srathaithe thíos — socraigh é de réir fhíor-chomhthráthacht an chuntais (m.sh. GLM ~1, MiniMax ~2).
+
+### Uasteorainneacha comhthráthachta in aghaidh na samhla (`modelConcurrency`)
+
+Is féidir le nasc uasteorainneacha beachta comhthráthachta in aghaidh na samhla a dhearbhú freisin
+laistigh dá mhapa `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Socraigh é i mód-dialóg an naisc (**Sáruithe teorann ráta → Uasteorainneacha
+comhthráthachta in aghaidh na samhla**, `model=cap` amháin in aghaidh na líne) nó trí
+`PATCH /api/providers/[id]` leis an struchtúr JSON céanna. Príomhshéimeantaic:
+
+- **Ar fud an naisc i gcomparáid le sainsamhail:** Is í `maxConcurrent` an uasteorainn
+  chomhroinnte ar fud an naisc i gcónaí. Nuair a bhíonn an dá cheann i bhfeidhm, faightear an dá gheata
+  go hadaimh sa gheata ilchodach céanna
+  (`global → provider → account → model`); is í an teorainn infheidhme is
+  déine a chinneann an t-iompar éifeachtach.
+- **Meaitseáil bheacht eochrach samhla:** is í an eochair an teaghrán samhla a chuirtear ar aghaidh chuig an
+  seiceadóir tar éis réiteach ródaithe — aitheantas lom na samhla réamhtheachtaí de ghnáth
+  (`glm-5`), ní ailias `provider/model` ar thaobh an chliaint (`zai/glm-5` ní
+  mheaitseálann sé `glm-5`). Is uasteorainneacha iarratas comhthráthach ina slánuimhreacha deimhneacha iad na luachanna.
+- **Ciúáil áitiúil, gan aimsiú:** téann iarratais bharrachais i gciú go háitiúil de réir na
+  séimeantaice ciúála/teorann ama atá ann cheana (earráidí iontrála clóscríofa `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). Ní aimsíonn ná ní thátalaíonn OmniRoute beartas réamhtheachtach —
+  cuireann sé i bhfeidhm na huasteorainneacha beachta a chumraigh an t-oibreoir. Ní dhíchumasaíonn
+  geata samhla atá sáithithe an soláthraí riamh agus ní chruthaíonn sé frithdhúnadh buan samhla;
+  fanann iompar réamhtheachtach 429/fuaraithe/chúltaca mar chúlstop earráide.
+- **Raon feidhme in aghaidh an naisc, in aghaidh an phróisis:** baineann uasteorainneacha le gach nasc bunachair sonraí
+  agus coinnítear sa chuimhne iad, mar sin ní chomhordaíonn dhá nasc a athúsáideann an eochair API réamhtheachtach chéanna
+  lena chéile.
+- **Gan chumrú, gan athrú:** mura gcuirtear an mapa san áireamh (nó má fhágtar réimse an
+  deais folamh), ní chuirtear aon gheata samhla leis. Cumraíocht shamplach gan
+  aon teorainn uilíoch soláthraí a mhaíomh:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Srathú iarratas comhroinnte cuóta
 
 Nuair a dhíríonn seoladh comhroinnte cuóta ar nasc a dhearbhaíonn
-`max_concurrent` dearfach, déantar iarratais chomhthráthacha chuig an **gcuntas** sin a shrathú trí
-sheamafór in aghaidh an naisc (eochair `qsconn:<connectionId>`): **fanann iarratais bhreise sa
-scuaine** seachas an cuntas a bhá. Oibríonn sé ar bhonn **fail-open** — leanann
-scuaine lán nó teorainn ama ar aghaidh gan sliotán seachas iarratas inseolta a
-dhiúltú riamh. Scoránaigh é in **Socruithe → Athléimneacht → Comhthráthacht in aghaidh an naisc le haghaidh
-comhroinnt cuóta** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, cumasaithe de réir
-réamhshocraithe). Gan uasteorainn `max_concurrent`, ní athraíonn an t-iompar.
+`max_concurrent` deimhneach, déantar iarratais chomhthráthacha chuig an **gcuntas** sin a shrathú trí
+sheamafór in aghaidh an naisc (eochair `qsconn:<connectionId>`): **fanann iarratais bharrachais sa
+chiú** seachas an cuntas a bhá. Tá sé **oscailte ar theip** — má bhíonn
+ciú sáithithe nó teorainn ama i gceist, leantar ar aghaidh gan sliotán seachas iarratas inseolta a
+dhiúltú riamh. Scoránaigh é in **Socruithe → Athléimneacht → Comhthráthacht in aghaidh an naisc
+do chomhroinnt cuóta** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, cumasaithe
+de réir réamhshocraithe). Gan uasteorainn `max_concurrent`, ní athraítear an t-iompar.
 
-> Oibríonn geata ródaithe na comhroinnte cuóta (`selectQuotaShareTarget`, DRR + P2C) féin ar bhonn
-> fail-open agus ní dhéanann sé ach nasc atá ag a uasteorainn a _dhíthosaíochtú_ — le
-> comhthiomsú aon naisc ní féidir leis teorainn chrua a chur i bhfeidhm, mar sin is é an seamafór seo a
-> choinníonn an tuile faoi smacht i ndáiríre.
+> Tá an geata ródaithe comhroinnte cuóta (`selectQuotaShareTarget`, DRR + P2C) féin
+> oscailte ar theip agus ní dhéanann sé ach nasc atá ag a uasteorainn a _ísliú ó thaobh tosaíochta de_ — le
+> comhthiomsú aon naisc ní féidir leis crua-theorainn a chur i bhfeidhm, mar sin is é an seamafór seo a
+> shrianann an tuile i ndáiríre.
 
-### Atriail a chuireann tréimhse fuaraithe an chomhcheangail san áireamh
+### Atriail atá feasach ar fhuarú teaglama
 
-I gcás gach straitéise comhcheangail (nuair atá sí cumasaithe), fanann iarratas a dhaingneodh earráid 429
-le linn tréimhse GHARR neamhbhuan fuaraithe go dtí go mbeidh sí thart agus seoltar arís é in ionad
-an 429 a thabhairt ar ais — clúdaíonn sé seo fuinneoga TPM/RPM den chineál Gemini (~60s retry-after)
-i gcomhcheangail ilmhúnla, m.sh. nuair a bhuaileann an dá sprioc i gcomhcheangal 2 mhúnla
-teorainn ráta in aghaidh an mhúnla. Tá sé teorannaithe ag `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) in **Socruithe → Athléimneacht**. Ní fhanann sé riamh i gcás `quota_exhausted`
-(faoi ghlas go meán oíche) ná ar chúiseanna fíordheimhnithe/neamhaimsithe.
+I gcás gach straitéise teaglama (nuair atá sí cumasaithe), fanann iarratas a dhaingneodh 429
+mar gheall ar fhuarú gearr sealadach go dtí go mbeidh deireadh leis agus seoltar arís é seachas
+an 429 a thabhairt ar ais — clúdaíonn sé seo fuinneoga TPM/RPM d'aicme Gemini (~60s retry-after)
+ar theaglamaí ilsamhla, m.sh. nuair a bhuaileann an dá sprioc i dteaglama dhá shamhail teorainn ráta
+in aghaidh na samhla. Tá sé teorannaithe ag `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) in **Socruithe → Athléimneacht**. Ní fhanann sé riamh ar `quota_exhausted`
+(faoi ghlas go meán oíche) ná ar chúiseanna fíordheimhnithe/gan aimsiú.
 
 ---
 

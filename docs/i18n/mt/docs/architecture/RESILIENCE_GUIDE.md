@@ -206,31 +206,30 @@ Il-mekkaniżmi relatati jibqgħu separati:
 
 ## 3. Imblukkar tal-Mudell
 
-**Ambitu:** it-triplett fornitur + konnessjoni + mudell.
+**Ambitu:** it-tripla fornitur + konnessjoni + mudell.
 
-**Ambitu taċ-ċavetta skont l-istatus:** l-istatus li jfalli jiddetermina f’liema ċavetta jinkiteb imblukkar
+**Ambitu taċ-ċavetta skont l-istatus:** l-istatus li jfalli jiddeċiedi f’liema ċavetta jinkiteb imblukkar
 (`resolveLockoutScope()` f’`open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — sinjal ta’ kwota jew intitolament — jimblokka l-**familja tal-kwota**:
-  għal codex, l-ambitu kollu `codex` / `spark` (kull mudell `gpt-5*`
-  tal-konnessjoni), u għal fornituri oħra `getQuotaScopedModelForProvider()`.
+- `429` / `403` / `402` — sinjal ta’ kwota jew intitolament — jimblukkaw il-**familja tal-kwota**:
+  għal codex, l-ambitu kollu `codex` / `spark` (kull mudell `gpt-5*` tal-
+  konnessjoni), u għal fornituri oħra `getQuotaScopedModelForProvider()`.
 - `404` jimblokka l-mudell bażiku (`getModelLockKey()` jirrestrinġi `not_found`).
-- Kwalunkwe status ieħor — fallimenti tat-trasport/server `5xx` u l-`502`
-  sintetizzat minn OmniRoute stess mill-validazzjoni tal-kwalità — jimblokka biss
-  it-tupla **eżatta** fornitur/konnessjoni/mudell. Fluss ħażin fuq mudell wieħed
-  mhuwiex evidenza dwar il-kwota tal-kont; qabel din ir-regola, tweġiba vojta waħda
-  fuq `codex/gpt-5.6-luna` kienet tneħħi kull mudell `gpt-5*` ta’ dik il-konnessjoni
-  mir-routing għal 2–30 minuta (b’eskalazzjoni), filwaqt li l-kwota tagħha ma kinitx
-  tintmess.
-- L-għażla espliċita `scope` ta’ min isejjaħ dejjem tieħu preċedenza (Antigravity jgħaddi `"exact"`).
+- Kwalunkwe status ieħor — fallimenti tat-trasport/server `5xx` u l-
+  `502` sintetizzat minn OmniRoute stess mill-validazzjoni tal-kwalità — jimblokka biss it-tliet elementi
+  eżatti fornitur/konnessjoni/mudell. Stream ħażin fuq mudell wieħed mhuwiex evidenza
+  dwar il-kwota tal-kont; qabel din ir-regola, rispons vojt wieħed fuq
+  `codex/gpt-5.6-luna` kien ineħħi kull mudell `gpt-5*` ta’ dik il-konnessjoni mir-
+  routing għal 2–30 minuta (b’eskalazzjoni), filwaqt li l-kwota tagħha kienet tibqa’ mhux mittiefsa.
+- L-għażla espliċita `scope` ta’ min jagħmel is-sejħa dejjem tieħu preċedenza (Antigravity jgħaddi `"exact"`).
 
-**Għan:** jiġi evitat li tiġi diżattivata konnessjoni sħiħa meta mudell wieħed biss ma jkunx disponibbli jew ikun limitat mill-kwota.
+**Għan:** jiġi evitat li konnessjoni sħiħa tiġi diżattivata meta mudell wieħed biss ma jkunx disponibbli jew ikun limitat mill-kwota.
 
 **Eżempji:**
 
 - Fornituri bi kwota għal kull mudell li jirritornaw 429
-- Fornituri lokali li jirritornaw 404 għal mudell wieħed nieqes
-- Fallimenti fil-permessi ta’ modalità/mudell speċifiċi għall-fornitur (eż., modalitajiet ta’ Grok)
+- Fornituri lokali li jirritornaw 404 għal mudell nieqes wieħed
+- Fallimenti ta’ permessi speċifiċi għall-fornitur għall-modalità/mudell (eż., modalitajiet Grok)
 
 **Implimentazzjoni:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
@@ -240,97 +239,155 @@ UI: Settings → Model Cooldowns (`src/app/(dashboard)/dashboard/settings/compon
 
 Jelenka l-imblukkar attiv flimkien ma’: fornitur, konnessjoni, mudell, raġuni, expiresAt. L-operaturi jistgħu jerġgħu jattivaw mudell manwalment mill-kard.
 
-**REST API:**
+**API REST:**
 
-- `GET /api/resilience/model-cooldowns` — elenka l-imblukkar attiv
-- `DELETE /api/resilience/model-cooldowns` — attivazzjoni mill-ġdid manwali. Korp: `{provider, connection, model}`. Awtorizzazzjoni: ġestjoni.
+- `GET /api/resilience/model-cooldowns` — jelenka l-imblukkar attiv
+- `DELETE /api/resilience/model-cooldowns` — riattivazzjoni manwali. Korp: `{provider, connection, model}`. Awtorizzazzjoni: management.
 
-### UI tas-settings tal-imblukkar + irkupru permezz ta’ tnaqqis wara suċċess (v3.8.23)
+### Maniġer tal-Perjodi ta’ Stennija
 
-L-imblukkar tal-mudell inbidel minn imġiba dejjem attiva u kkodifikata b’mod fiss
-għal funzjonalità kompletament konfigurabbli, li trid tiġi attivata espliċitament,
-bil-kard tas-settings tagħha stess u perkors ta’ rkupru li jsewwi lilu nnifsu.
+UI: Monitoring → Cooldown Manager (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Paġna waħda għal kull konnessjoni li tkun barra mir-routing għal raġuni temporanja, minflok
+ma tinfetaħ il-paġna ta’ kull fornitur. Din telenka l-perjodi ta’ stennija tal-konnessjonijiet, l-imblukkar tal-mudelli u l-
+istati terminali, tneħħihom għal kull konnessjoni, għal għażla, jew għall-konnessjonijiet kollha ta’ fornitur,
+u teditja r-regoli tal-perjodi ta’ stennija li jiġu rfinati l-aktar: `streamStallCooldown.enabled` u l-
+perjodu ta’ stennija bażi `connectionCooldown` għal OAuth / API-key u l-għadd massimu ta’ passi ta’ backoff (issejvjati permezz ta’
+`PATCH /api/resilience`). L-istati terminali (`banned`, `expired`, `credits_exhausted`) huma
+elenkati iżda qatt ma jitneħħew minn hawn.
+
+**API REST** (`src/lib/resilience/cooldownManager.ts`, awtorizzazzjoni: management):
+
+- `GET /api/resilience/cooldowns[?provider=]` — konnessjonijiet bl-istatus, il-perjodu ta’ stennija li jifdal,
+  il-livell ta’ backoff, l-aħħar tip ta’ żball u l-imblukkar tal-mudelli (mingħajr kredenzjali)
+- `POST /api/resilience/cooldowns` — korp `{connectionIds: string[]}` jew
+  `{all: true, provider?}`; jirritorna `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI tas-settings tal-imblukkar + irkupru bi tnaqqis wara suċċess (v3.8.23)
+
+L-imblukkar tal-mudelli nbidel minn imġiba hardcoded dejjem attiva għal karatteristika kompletament konfigurabbli,
+li trid tiġi attivata b’mod espliċitu, bil-kard tas-settings tagħha stess u b’mekkaniżmu ta’ rkupru awtokorrettiv.
 
 **Kard tas-settings:** Settings → Model Lockout
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Din hija **distinta** mill-`ModelCooldownsCard` li jinqara biss hawn fuq (li
-sempliċement _jelenka_ l-imblukkar attiv) — il-kard il-ġdida _tikkonfigura l-parametri_.
-Il-valuri default jinsabu f’`DEFAULT_MODEL_LOCKOUT_SETTINGS`
+Din hija **distinta** mill-`ModelCooldownsCard` li tinqara biss imsemmija hawn fuq (li
+_telenka_ biss l-imblukkar attiv) — il-kard il-ġdida _tikkonfigura l-parametri_. Il-valuri
+predefiniti jinsabu f’`DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Setting                 | Default                          | Tifsira                                                                        |
+| Setting                 | Valur predefinit                 | Tifsira                                                                        |
 | ----------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| `enabled`               | `false`                          | Swiċċ ewlieni — l-imblukkar tal-mudell huwa **mitfi b’mod default**.           |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status upstream li jitqiesu bħala falliment fl-ambitu tal-mudell.              |
+| `enabled`               | `false`                          | Swiċċ ewlieni — l-imblukkar tal-mudelli huwa **mitfi b’mod predefinit**.       |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status upstream li jgħoddu bħala falliment fl-ambitu tal-mudell.               |
 | `baseCooldownMs`        | `120_000` (120 s)                | Tul inizjali tal-imblukkar għall-ewwel falliment.                              |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Limitu massimu fuq il-perjodu ta’ stennija eskalat.                            |
-| `maxBackoffSteps`       | `10`                             | Numru massimu ta’ passi ta’ eskalazzjoni tal-backoff esponenzjali.             |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Limitu massimu għall-perjodu ta’ stennija eskalat.                             |
+| `maxBackoffSteps`       | `10`                             | Għadd massimu ta’ passi ta’ eskalazzjoni ta’ backoff esponenzjali.             |
 | `useExponentialBackoff` | `true`                           | Jekk fallimenti ripetuti jeskalawx il-perjodu ta’ stennija b’mod esponenzjali. |
 
-Is-settings jinżammu permezz tal-maħżen normali tas-settings u jiġu vvalidati
-permezz tal-iskema tas-settings tar-reżiljenza; il-kard tillimita `baseCooldownMs`/`maxCooldownMs`
+Is-settings jippersistu permezz tal-ħażna normali tas-settings u jiġu vvalidati permezz tal-
+iskema tas-settings tar-reżiljenza; il-kard tillimita `baseCooldownMs`/`maxCooldownMs`
 (b’`maxCooldownMs ≥ baseCooldownMs`) u `maxBackoffSteps`.
 
-**Irkupru permezz ta’ tnaqqis wara suċċess:** l-irkupru **mhuwiex** sempliċement
-l-iskadenza tat-tajmer. Tweġiba valida tnaqqas progressivament l-għadd ta’
-fallimenti tal-mudell sabiex mudell li rkupra f’nofs il-perjodu jieqaf jeskala
-(u jitneħħielu l-imblukkar) qabel ma jintemm it-tajmer tiegħu. Meta combo target
-jirnexxi, `open-sse/services/combo.ts` isejjaħ `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), li **jnaqqas bin-nofs** il-`failureCount`
-maħżun (`Math.floor(failureCount / 2)`); meta jilħaq `0`, l-entrata tal-imblukkar
-titħassar kompletament. Il-kontroparti `recordModelLockoutFailure()`
-iżżid l-għadd (u teskala l-perjodu ta’ stennija) għal fallimenti fi ħdan
-it-tieqa tal-eskalazzjoni. Dan it-tnaqqis wara suċċess huwa addizzjonali
-għall-iskadenza normali tat-tajmer — kwalunkwe wieħed miż-żewġ perkorsi jista’
-jerġa’ jattiva mudell.
+**Irkupru bi tnaqqis wara suċċess:** l-irkupru **mhuwiex** ibbażat biss fuq l-iskadenza tat-tajmer. Rispons
+tajjeb inaqqas progressivament l-għadd ta’ fallimenti tal-mudell sabiex mudell li jkun irkupra
+f’nofs il-perjodu jieqaf jeskala (u jitneħħielu l-imblukkar) qabel ma jintemm it-tajmer tiegħu. Meta destinazzjoni
+combo tirnexxi, `open-sse/services/combo.ts` issejjaħ `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), li **jnaqqas bin-nofs** il-
+`failureCount` maħżun (`Math.floor(failureCount / 2)`); meta jilħaq `0`, l-entrata tal-imblukkar
+titħassar kompletament. Il-funzjoni korrispondenti `recordModelLockoutFailure()`
+iżżid l-għadd (u teskala l-perjodu ta’ stennija) għal fallimenti fil-perjodu
+ta’ eskalazzjoni. Dan it-tnaqqis wara suċċess jiżdied mal-iskadenza normali tat-tajmer —
+kwalunkwe wieħed miż-żewġ mekkaniżmi jista’ jerġa’ jattiva mudell.
 
 **Stat:** l-imblukkar jinżamm **fil-memorja** (`Map`s għal kull proċess ta’
-`ModelLockoutEntry` indiċjati permezz ta’ `provider:connectionId:model`, u
-imblukkar b’ambitu eżatt permezz ta’ `provider:connectionId:exact:model`), u ma
-jinżammx fid-DB — jintilef meta jerġa’ jinbeda l-proċess. Is-_settings_ jinżammu;
-l-_istat_ tal-imblukkar attiv huwa temporanju.
+`ModelLockoutEntry` indikati minn `provider:connectionId:model`, u imblukkar b’ambitu eżatt minn
+`provider:connectionId:exact:model`), u ma jippersistix fid-
+DB — jintilef meta jerġa’ jinbeda l-proċess. Is-_settings_ jippersistu; l-_istat_ tal-imblukkar attiv huwa temporanju.
 
 ---
 
-## 4. Kontroll tal-Konkorrenti b’Quota-Share (v3.8.36)
+## 4. Kontroll tal-Konkurrenza għal Quota-Share (v3.8.36)
 
-Il-kontijiet ta’ abbonament (GLM, MiniMax, eċċ.) spiss jaċċettaw biss ~1–3 talbiet
-konkorrenti; jekk jinqabeż dan il-limitu jiġu attivati 429s u perjodi ta’ stennija. Dan huwa partikolarment serju taħt
-kombinazzjonijiet **quota-share** (`qtSd/…`), fejn diversi ċwievet tal-API jaqsmu kont wieħed
-upstream. Tliet saffi jipprevjenu li kont kondiviż jiġi mgħarraq bit-talbiet.
+Il-kontijiet b'abbonament (GLM, MiniMax, eċċ.) spiss jaċċettaw biss ~1–3 talbiet konkorrenti; jekk jinqabeż dan il-limitu, jiġu attivati żbalji 429 u perjodi ta' cooldown. Dan huwa partikolarment serju f'kombinazzjonijiet ta' **quota-share** (`qtSd/…`), fejn diversi API keys jaqsmu kont upstream wieħed. Tliet saffi jipprevjenu kont kondiviż milli jiġi mgħarraq bit-talbiet.
 
-### Limitu tal-konkorrenti għal kull konnessjoni (`max_concurrent`)
+### Limitu tal-konkurrenza għal kull konnessjoni (`max_concurrent`)
 
-Kull konnessjoni ma’ fornitur tista’ tiddikjara limitu massimu `max_concurrent`
+Kull konnessjoni ta' provider tista' tiddikjara limitu massimu `max_concurrent`
 (`provider_connections.max_concurrent`, issettjat fil-modal tal-konnessjoni / API / DB).
-Ħallih vojt biex ma jkun hemm ebda limitu. Dan huwa l-uniku kontroll li jmexxi s-saff
-ta’ serjalizzazzjoni hawn taħt — issettjah skont il-konkorrenti reali tal-kont (eż. GLM ~1, MiniMax ~2).
+Ħallih vojt biex ma jkun hemm l-ebda limitu. Dan huwa l-kontroll uniku li jmexxi s-saff ta' serjalizzazzjoni
+hawn taħt — issettjah skont il-konkurrenza reali tal-kont (eż. GLM ~1, MiniMax ~2).
 
-### Serjalizzazzjoni tat-talbiet quota-share
+### Limiti tal-konkurrenza għal kull mudell (`modelConcurrency`)
 
-Meta distribuzzjoni quota-share timmira konnessjoni li tiddikjara
-`max_concurrent` pożittiv, it-talbiet konkorrenti lejn dak il-**kont** jiġu sserjalizzati permezz ta’
-semaforu għal kull konnessjoni (ċavetta `qsconn:<connectionId>`): it-talbiet żejda **jistennew
-fil-kju** minflok jgħarrqu l-kont. Dan huwa **fail-open** — kju saturat
-jew skadenza tat-terminu jkompli mingħajr slot minflok ma qatt jirrifjuta talba
-li tista’ tiġi distribwita. Aqleb din l-għażla minn **Settings → Resilience → Quota-share per-connection
-concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, mixgħul
-b’mod predefinit). Mingħajr limitu `max_concurrent`, l-imġiba tibqa’ l-istess.
+Konnessjoni tista' wkoll tiddikjara limiti massimi eżatti tal-konkurrenza għal kull mudell
+fil-mappa `rateLimitOverrides` tagħha:
 
-> Il-gate tar-routing quota-share (`selectQuotaShareTarget`, DRR + P2C) huwa nnifsu
-> fail-open u sempliċement jagħti _prijorità aktar baxxa_ lil konnessjoni li laħqet il-limitu — b’pool
-> ta’ konnessjoni waħda ma jistax jimponi limitu strett, għalhekk dan is-semaforu huwa dak li effettivament
-> irażżan l-għargħar.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### Tentattiv mill-ġdid konxju tal-perjodu ta’ stennija għall-kombinazzjonijiet
+Issettjah fil-modal tal-konnessjoni (**Sovrasrizzjonijiet tal-limitu tar-rata → Limiti tal-konkurrenza
+għal kull mudell**, `model=cap` wieħed għal kull linja) jew permezz ta'
+`PATCH /api/providers/[id]` bl-istess struttura JSON. Semantika ewlenija:
 
-Għal kull strateġija ta’ kombinazzjoni (meta tkun attivata), talba li kieku tikkristallizza 429
-għal perjodu QASIR u temporanju ta’ stennija tistenna sakemm jgħaddi u terġa’ tiġi distribwita minflok
-ma tirritorna l-429 — dan ikopri t-twieqi TPM/RPM tal-klassi Gemini (~60s retry-after)
-fuq kombinazzjonijiet b’diversi mudelli, eż. meta ż-żewġ destinazzjonijiet ta’ kombinazzjoni b’2 mudelli jilħqu limitu
-tar-rata għal kull mudell. Dan huwa limitat minn `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) f’**Settings → Resilience**. Qatt ma jistenna għal `quota_exhausted`
-(imsakkar sa nofsillejl) jew għal raġunijiet ta’ awtentikazzjoni/riżorsa mhux misjuba.
+- **Għall-konnessjoni kollha kontra speċifiku għall-mudell:** `maxConcurrent` jibqa' l-limitu kondiviż
+  għall-konnessjoni kollha. Meta japplikaw it-tnejn, iż-żewġ gates jinkisbu
+  atomikament fl-istess gate kompost
+  (`global → provider → account → model`); l-imġiba effettiva tkun dik tal-limitu
+  applikabbli l-aktar strett.
+- **Tqabbil eżatt taċ-ċavetta tal-mudell:** iċ-ċavetta hija s-sekwenza tal-mudell mgħoddija lill-
+  executor wara r-riżoluzzjoni tar-routing — normalment l-id bażiku tal-mudell upstream
+  (`glm-5`), mhux alias `provider/model` min-naħa tal-klijent (`zai/glm-5` ma
+  jaqbilx ma' `glm-5`). Il-valuri huma limiti ta' numri sħaħ pożittivi għal talbiet konkorrenti.
+- **Kju lokali, mingħajr skoperta:** it-talbiet żejda jidħlu fi kju lokalment bis-
+  semantika eżistenti tal-kju/timeout (żbalji ta' ammissjoni ttajpjati `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute ma jiskoprix u ma
+  jiddeduċix il-politika upstream — jinforza l-limiti eżatti li jkun
+  ikkonfigura l-operatur. Gate ta' mudell saturat qatt ma jiddiżattiva l-provider u qatt ma
+  joħloq lockout permanenti tal-mudell; l-imġiba upstream għal 429/cooldown/fallback
+  tibqa' l-aħħar linja ta' difiża kontra l-iżbalji.
+- **Ambitu għal kull konnessjoni u għal kull proċess:** il-limiti japplikaw għal kull konnessjoni tad-database
+  u jinżammu fil-memorja, għalhekk żewġ konnessjonijiet li jerġgħu jużaw l-istess API key upstream
+  ma jikkoordinawx bejniethom.
+- **Mhux ikkonfigurat ifisser li ma jinbidel xejn:** jekk il-mappa titħalla barra (jew il-
+  field tad-dashboard jitħalla vojt), ma jiżdied l-ebda gate tal-mudell. Eżempju ta' konfigurazzjoni mingħajr
+  ma jiġi ddikjarat xi limitu universali tal-provider:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Serjalizzazzjoni tat-talbiet ta' quota-share
+
+Meta dispatch ta' quota-share jimmira konnessjoni li tiddikjara
+`max_concurrent` pożittiv, it-talbiet konkorrenti lejn dak il-**kont** jiġu sserjalizzati permezz ta'
+semaphore għal kull konnessjoni (ċavetta `qsconn:<connectionId>`): it-talbiet żejda **jistennew fil-
+kju** minflok jgħarrqu l-kont. Dan huwa **fail-open** — kju saturat
+jew timeout jipproċedi mingħajr slot minflok qatt ma jirrifjuta talba li tista'
+tiġi ddispaċċjata. Aqilbu minn **Settings → Resilience → Quota-share per-connection
+concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, attiv
+b'mod awtomatiku). Mingħajr limitu `max_concurrent`, l-imġiba ma tinbidilx.
+
+> Il-gate tar-routing ta' quota-share (`selectQuotaShareTarget`, DRR + P2C) huwa nnifsu
+> fail-open u sempliċement _inaqqas il-prijorità_ ta' konnessjoni li tkun laħqet il-limitu — b'
+> pool ta' konnessjoni waħda ma jistax jinforza limitu strett, għalhekk dan is-semaphore huwa dak li effettivament
+> iżomm l-għargħar taħt kontroll.
+
+### Tentattiv mill-ġdid konxju tal-cooldown għal combos
+
+Għal kull strateġija ta' combo (meta tkun attivata), talba li kieku tikkristallizza żball 429
+għal cooldown temporanju QASIR tistenna li jintemm u terġa' tiġi ddispaċċjata minflok
+ma tirritorna l-429 — dan ikopri twieqi TPM/RPM tal-klassi Gemini (~60s retry-after)
+fuq combos b'diversi mudelli, eż. meta ż-żewġ targets ta' combo b'2 mudelli jilħqu limitu tar-rata
+għal kull mudell. Dan huwa limitat minn `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) f'**Settings → Resilience**. Qatt ma jistenna għal `quota_exhausted`
+(imsakkar sa nofsillejl) jew għal raġunijiet ta' awtentikazzjoni/ma nstabx.
 
 ---
 

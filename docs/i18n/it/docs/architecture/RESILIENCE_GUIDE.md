@@ -206,36 +206,36 @@ I meccanismi correlati rimangono separati:
 
 ## 3. Blocco del modello
 
-**Ambito:** tripla provider + connessione + modello.
+**Ambito:** terna provider + connessione + modello.
 
 **Ambito della chiave in base allo stato:** lo stato dell'errore determina su quale chiave viene scritto un blocco
 (`resolveLockoutScope()` in `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — un segnale relativo alla quota o all'abilitazione — bloccano la **famiglia di quota**:
+- `429` / `403` / `402` — un segnale relativo alla quota o ai diritti di accesso — bloccano la **famiglia di quota**:
   per codex, l'intero ambito `codex` / `spark` (ogni modello `gpt-5*` della
   connessione); per gli altri provider, `getQuotaScopedModelForProvider()`.
-- `404` blocca il modello specifico (`getModelLockKey()` restringe `not_found`).
-- Qualsiasi altro stato — errori di trasporto/server `5xx` e il `502`
-  sintetizzato internamente da OmniRoute durante la convalida della qualità — blocca **esclusivamente**
-  la tupla esatta provider/connessione/modello. Uno stream difettoso su un modello non costituisce una prova
-  relativa alla quota dell'account; prima di questa regola, una singola risposta vuota su
-  `codex/gpt-5.6-luna` rimuoveva dal routing ogni modello `gpt-5*` di quella
-  connessione per 2–30 min (con durata crescente), mentre la relativa quota rimaneva invariata.
+- `404` blocca il singolo modello (`getModelLockKey()` restringe `not_found`).
+- Qualsiasi altro stato — errori di trasporto/server `5xx` e il `502` generato
+  internamente da OmniRoute durante la convalida della qualità — blocca solo la
+  terna **esatta** provider/connessione/modello. Uno stream non valido su un modello non dimostra
+  nulla sulla quota dell'account; prima di questa regola, una singola risposta vuota su
+  `codex/gpt-5.6-luna` rimuoveva dal routing ogni modello `gpt-5*` di quella connessione
+  per 2–30 min (con durata crescente), anche se la relativa quota non era stata utilizzata.
 - L'opzione `scope` esplicita del chiamante ha sempre la precedenza (Antigravity passa `"exact"`).
 
-**Scopo:** evitare di disabilitare un'intera connessione quando solo un modello non è disponibile o è soggetto a limitazioni di quota.
+**Scopo:** evitare di disabilitare un'intera connessione quando solo un modello non è disponibile o è soggetto a limiti di quota.
 
 **Esempi:**
 
 - Provider con quota per modello che restituiscono 429
 - Provider locali che restituiscono 404 per un singolo modello mancante
-- Errori di autorizzazione specifici del provider relativi a modalità/modelli (ad es., modalità Grok)
+- Errori di autorizzazione specifici del provider per modalità/modello (ad es. le modalità Grok)
 
 **Implementazione:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Dashboard dei periodi di sospensione dei modelli (v3.8.0)
+### Dashboard dei cooldown dei modelli (v3.8.0)
 
-Interfaccia: Impostazioni → Periodi di sospensione dei modelli (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+UI: Impostazioni → Cooldown dei modelli (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
 Elenca i blocchi attivi con: provider, connessione, modello, motivo, expiresAt. Gli operatori possono riabilitare manualmente un modello dalla scheda.
 
@@ -244,89 +244,154 @@ Elenca i blocchi attivi con: provider, connessione, modello, motivo, expiresAt. 
 - `GET /api/resilience/model-cooldowns` — elenca i blocchi attivi
 - `DELETE /api/resilience/model-cooldowns` — riabilitazione manuale. Corpo: `{provider, connection, model}`. Autenticazione: gestione.
 
-### Interfaccia delle impostazioni di blocco + ripristino tramite decadimento in caso di successo (v3.8.23)
+### Gestore dei cooldown
 
-Il blocco dei modelli è passato da un comportamento codificato in modo fisso e sempre attivo a una funzionalità
-completamente configurabile e facoltativa, dotata di una propria scheda delle impostazioni e di un percorso di ripristino autorigenerante.
+UI: Monitoraggio → Gestore dei cooldown (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Una sola pagina per ogni connessione esclusa dal routing per un motivo transitorio, invece di
+aprire la pagina di ciascun provider. Elenca i cooldown delle connessioni, i blocchi dei modelli e gli stati
+terminali; li elimina per una singola connessione, per una selezione o per tutte le connessioni di un provider
+e consente di modificare le regole di cooldown più comunemente regolate: `streamStallCooldown.enabled` e il cooldown
+di base `connectionCooldown` per OAuth / chiave API, nonché il numero massimo di passaggi di backoff (salvati tramite
+`PATCH /api/resilience`). Gli stati terminali (`banned`, `expired`, `credits_exhausted`) vengono
+elencati, ma non sono mai eliminati da qui.
+
+**API REST** (`src/lib/resilience/cooldownManager.ts`, autenticazione: gestione):
+
+- `GET /api/resilience/cooldowns[?provider=]` — connessioni con stato, cooldown rimanente,
+  livello di backoff, tipo dell'ultimo errore e blocchi dei modelli (senza credenziali)
+- `POST /api/resilience/cooldowns` — corpo `{connectionIds: string[]}` oppure
+  `{all: true, provider?}`; restituisce `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI delle impostazioni di blocco + ripristino con decadimento dopo i successi (v3.8.23)
+
+Il blocco dei modelli è passato da un comportamento hardcoded e sempre attivo a una funzionalità
+completamente configurabile, attivabile su richiesta, con una propria scheda delle impostazioni e un percorso di ripristino automatico.
 
 **Scheda delle impostazioni:** Impostazioni → Blocco del modello
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Questa è **distinta** dalla scheda `ModelCooldownsCard` di sola lettura descritta sopra (che si limita a
-_elencare_ i blocchi attivi): la nuova scheda _configura i parametri_. I valori predefiniti
+Questa è **distinta** dalla scheda di sola lettura `ModelCooldownsCard` sopra indicata (che si limita
+a _elencare_ i blocchi attivi): la nuova scheda _configura i parametri_. I valori predefiniti
 si trovano in `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
 | Impostazione            | Valore predefinito               | Significato                                                                                    |
 | ----------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `enabled`               | `false`                          | Interruttore principale: il blocco dei modelli è **disattivato per impostazione predefinita**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stati upstream conteggiati come errori con ambito di modello.                                  |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stati upstream considerati errori con ambito limitato al modello.                              |
 | `baseCooldownMs`        | `120_000` (120 s)                | Durata iniziale del blocco per il primo errore.                                                |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Limite massimo del periodo di sospensione incrementato.                                        |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Limite massimo del cooldown crescente.                                                         |
 | `maxBackoffSteps`       | `10`                             | Numero massimo di passaggi di incremento del backoff esponenziale.                             |
-| `useExponentialBackoff` | `true`                           | Indica se gli errori ripetuti incrementano esponenzialmente il periodo di sospensione.         |
+| `useExponentialBackoff` | `true`                           | Indica se gli errori ripetuti incrementano esponenzialmente il cooldown.                       |
 
-Le impostazioni vengono salvate tramite il normale archivio delle impostazioni e convalidate mediante lo
+Le impostazioni vengono mantenute tramite il normale archivio delle impostazioni e convalidate mediante lo
 schema delle impostazioni di resilienza; la scheda limita `baseCooldownMs`/`maxCooldownMs`
 (con `maxCooldownMs ≥ baseCooldownMs`) e `maxBackoffSteps`.
 
-**Ripristino tramite decadimento in caso di successo:** il ripristino **non** dipende esclusivamente dalla scadenza del timer. Una risposta
-valida riduce progressivamente il conteggio degli errori del modello, così un modello che torna operativo
-durante l'intervallo smette di incrementare la penalità (e il blocco viene rimosso) prima della scadenza del timer. Quando un
-target combinato restituisce una risposta corretta, `open-sse/services/combo.ts` chiama `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), che **dimezza** il valore
-`failureCount` memorizzato (`Math.floor(failureCount / 2)`); quando raggiunge `0`, la voce di blocco
+**Ripristino con decadimento dopo i successi:** il ripristino **non** dipende esclusivamente dalla scadenza del timer. Una risposta
+valida riduce progressivamente il conteggio degli errori del modello, in modo che un modello ripristinatosi
+durante la finestra smetta di aumentare il cooldown (e venga sbloccato) prima della scadenza del timer. Quando un
+target della combinazione risponde correttamente, `open-sse/services/combo.ts` chiama `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), che **dimezza** il valore `failureCount` memorizzato
+(`Math.floor(failureCount / 2)`); quando raggiunge `0`, la voce del blocco
 viene eliminata completamente. La funzione complementare `recordModelLockoutFailure()`
-incrementa il conteggio (e aumenta il periodo di sospensione) per gli errori verificatisi entro la
-finestra di incremento. Questo decadimento in caso di successo si aggiunge alla normale scadenza del timer:
+incrementa il conteggio (e aumenta il cooldown) in caso di errori all'interno della
+finestra di incremento. Questo decadimento dopo i successi si aggiunge alla normale scadenza del timer:
 entrambi i percorsi possono riabilitare un modello.
 
-**Stato:** i blocchi vengono mantenuti **in memoria** (`Map` per processo di
-`ModelLockoutEntry` indicizzate tramite `provider:connectionId:model`; i blocchi con ambito esatto tramite
-`provider:connectionId:exact:model`) e non vengono salvati nel
-DB: vengono persi al riavvio. Le _impostazioni_ vengono salvate; lo _stato_ dei
-blocchi attivi è temporaneo.
+**Stato:** i blocchi sono conservati **in memoria** (`Map` per processo di
+`ModelLockoutEntry` indicizzate da `provider:connectionId:model`; i blocchi con ambito esatto da
+`provider:connectionId:exact:model`) e non sono persistiti nel
+DB: vengono persi al riavvio. Le _impostazioni_ vengono mantenute; lo _stato_ dei blocchi attivi
+è temporaneo.
 
 ---
 
 ## 4. Controllo della concorrenza Quota-Share (v3.8.36)
 
-Gli account in abbonamento (GLM, MiniMax, ecc.) spesso accettano solo ~1–3 richieste
-concorrenti; il superamento di questo limite causa errori 429 e periodi di cooldown. Il problema è particolarmente rilevante con le combinazioni
+Gli account con abbonamento (GLM, MiniMax, ecc.) spesso accettano solo ~1–3 richieste
+concorrenti; il superamento di tale limite genera errori 429 e periodi di cooldown. Il problema è particolarmente rilevante con le combinazioni
 **quota-share** (`qtSd/…`), in cui più chiavi API condividono un unico account
 upstream. Tre livelli impediscono che un account condiviso venga sovraccaricato.
 
 ### Limite di concorrenza per connessione (`max_concurrent`)
 
-Ogni connessione del provider può dichiarare un limite `max_concurrent`
-(`provider_connections.max_concurrent`, impostato nella finestra modale della connessione / API / DB).
+Ogni connessione a un provider può dichiarare un limite massimo `max_concurrent`
+(`provider_connections.max_concurrent`, impostato nella finestra modale della connessione / tramite API / nel DB).
 Lasciarlo vuoto per non applicare alcun limite. Questa è l'unica impostazione che controlla il livello di serializzazione
 descritto di seguito: impostarla sulla concorrenza effettiva dell'account (ad es. GLM ~1, MiniMax ~2).
 
-### Serializzazione delle richieste quota-share
+### Limiti di concorrenza per modello (`modelConcurrency`)
 
-Quando un dispatch quota-share ha come destinazione una connessione che dichiara un valore
-`max_concurrent` positivo, le richieste concorrenti verso tale **account** vengono serializzate tramite un
+Una connessione può inoltre dichiarare limiti massimi esatti di concorrenza per modello
+all'interno della propria mappa `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Impostarli nella finestra modale della connessione (**Override dei limiti di frequenza → Limiti di
+concorrenza per modello**, un `model=cap` per riga) oppure tramite
+`PATCH /api/providers/[id]` con la stessa struttura JSON. Semantica delle chiavi:
+
+- **A livello di connessione rispetto a specifico per modello:** `maxConcurrent` rimane il limite massimo
+  condiviso a livello di connessione. Quando si applicano entrambi, entrambi i gate vengono acquisiti
+  atomicamente nello stesso gate composito
+  (`global → provider → account → model`); il comportamento effettivo è determinato dal
+  limite applicabile più restrittivo.
+- **Corrispondenza esatta della chiave del modello:** la chiave è la stringa del modello passata
+  all'executor dopo la risoluzione del routing, normalmente l'id semplice del modello upstream
+  (`glm-5`), non un alias `provider/model` lato client (`zai/glm-5` non
+  corrisponde a `glm-5`). I valori sono limiti massimi interi positivi di richieste concorrenti.
+- **Accodamento locale, nessun rilevamento:** le richieste in eccesso vengono accodate localmente con la
+  semantica esistente di coda/timeout (errori di ammissione tipizzati `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute non rileva né
+  deduce le politiche upstream: applica esattamente i limiti massimi configurati
+  dall'operatore. Un gate di modello saturo non disabilita mai il provider e non
+  crea mai un blocco permanente del modello; il comportamento upstream relativo a errori 429, cooldown e fallback
+  rimane il meccanismo di protezione finale in caso di errore.
+- **Ambito per connessione e per processo:** i limiti massimi si applicano a ogni connessione del database
+  e vengono mantenuti in memoria, pertanto due connessioni che riutilizzano la stessa chiave API upstream
+  non si coordinano tra loro.
+- **Non configurato significa invariato:** omettere la mappa (o lasciare vuoto il
+  campo nella dashboard) non aggiunge alcun gate di modello. Esempio di configurazione che non
+  impone alcun limite universale al provider:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Serializzazione delle richieste Quota-Share
+
+Quando un dispatch quota-share ha come destinazione una connessione che dichiara un valore positivo di
+`max_concurrent`, le richieste concorrenti verso quell'**account** vengono serializzate tramite un
 semaforo per connessione (chiave `qsconn:<connectionId>`): le richieste in eccesso **attendono nella
-coda** anziché sovraccaricare l'account. Il comportamento è **fail-open**: se la
-coda è satura o scade il timeout, la richiesta procede senza uno slot anziché rifiutare una richiesta
-che può essere inoltrata. L'opzione è disponibile in **Impostazioni → Resilienza → Concorrenza per connessione
-quota-share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, attiva per
-impostazione predefinita). Senza un limite `max_concurrent`, il comportamento rimane invariato.
+coda** invece di sovraccaricare l'account. Il comportamento è **fail-open**: una coda satura
+o un timeout fa sì che l'esecuzione proceda senza uno slot, anziché rifiutare una richiesta
+che può essere inoltrata. L'opzione è disponibile in **Impostazioni → Resilienza → Concorrenza
+per connessione Quota-Share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, attiva
+per impostazione predefinita). In assenza di un limite `max_concurrent`, il comportamento rimane invariato.
 
-> Il gate di routing quota-share (`selectQuotaShareTarget`, DRR + P2C) è anch'esso
+> Il gate di routing quota-share (`selectQuotaShareTarget`, DRR + P2C) è a sua volta
 > fail-open e si limita a _deprioritizzare_ una connessione che ha raggiunto il limite; con un
-> pool a connessione singola non può imporre un limite rigido, quindi è questo semaforo a contenere
+> pool a connessione singola non può imporre un limite rigido, pertanto è questo semaforo a contenere
 > effettivamente il sovraccarico.
 
-### Nuovo tentativo sensibile al cooldown delle combinazioni
+### Nuovo tentativo sensibile al cooldown per le combinazioni
 
 Per ogni strategia di combinazione (quando abilitata), una richiesta che renderebbe definitivo un errore 429
-per un BREVE cooldown transitorio attende che termini ed esegue nuovamente il dispatch anziché
-restituire il 429. Ciò copre le finestre TPM/RPM della classe Gemini (~60s di retry-after)
-nelle combinazioni multi-modello, ad es. quando entrambe le destinazioni di una combinazione a 2 modelli raggiungono un limite di frequenza
-per modello. Il comportamento è limitato da `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+per un BREVE cooldown transitorio attende che termini e viene inoltrata nuovamente, anziché
+restituire l'errore 429. Ciò copre le finestre TPM/RPM di classe Gemini (~60 s di retry-after)
+nelle combinazioni multimodello, ad esempio quando entrambe le destinazioni di una combinazione a 2 modelli
+raggiungono un limite di frequenza per modello. Il comportamento è limitato da `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
 `budgetMs`) in **Impostazioni → Resilienza**. Non attende mai per `quota_exhausted`
-(bloccato fino a mezzanotte) o per motivi di autenticazione/risorsa non trovata.
+(bloccato fino a mezzanotte) né per motivi di autenticazione o risorsa non trovata.
 
 ---
 

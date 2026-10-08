@@ -206,30 +206,30 @@ Taratibu zinazohusiana hubaki tofauti:
 
 ## 3. Kufungiwa kwa Modeli
 
-**Upeo:** muungano wa mtoa huduma + muunganisho + modeli.
+**Upeo:** mtoa huduma + muunganisho + modeli.
 
-**Upeo wa ufunguo kulingana na hali:** hali inayosababisha hitilafu huamua ni ufunguo upi ambao kufungiwa huandikiwa
+**Upeo wa ufunguo kulingana na hali:** hali inayoshindwa huamua ni ufunguo upi unaoandikiwa ufungiaji
 (`resolveLockoutScope()` katika `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — ishara ya kiwango cha matumizi au haki ya ufikiaji — hufunga **familia ya kiwango cha matumizi**:
+- `429` / `403` / `402` — ishara ya kikomo au haki ya matumizi — hufunga **familia ya kikomo**:
   kwa codex, upeo mzima wa `codex` / `spark` (kila modeli ya `gpt-5*` ya
-  muunganisho huo), na kwa watoa huduma wengine `getQuotaScopedModelForProvider()`.
-- `404` hufunga modeli husika pekee (`getModelLockKey()` hupunguza upeo wa `not_found`).
+  muunganisho), na kwa watoa huduma wengine `getQuotaScopedModelForProvider()`.
+- `404` hufunga modeli yenyewe (`getModelLockKey()` hupunguza upeo wa `not_found`).
 - Hali nyingine yoyote — hitilafu za usafirishaji/seva za `5xx` na `502`
-  inayoundwa na OmniRoute yenyewe kutokana na uthibitishaji wa ubora — hufunga tu
-  muungano **mahususi** wa mtoa huduma/muunganisho/modeli. Mtiririko mbovu kwenye modeli moja si ushahidi
-  kuhusu kiwango cha matumizi cha akaunti; kabla ya kanuni hii, jibu moja tupu kwenye
+  iliyozalishwa na OmniRoute yenyewe kutokana na uthibitishaji wa ubora — hufunga tu
+  muunganiko **mahususi** wa mtoa huduma/muunganisho/modeli. Mtiririko mbovu kwenye modeli moja
+  si ushahidi kuhusu kikomo cha akaunti; kabla ya kanuni hii, jibu moja tupu kwenye
   `codex/gpt-5.6-luna` liliondoa kila modeli ya `gpt-5*` ya muunganisho huo kutoka
-  kwenye uelekezaji kwa dakika 2–30 (zikiongezeka hatua kwa hatua), ingawa kiwango chake cha matumizi hakikuwa kimeathiriwa.
-- Chaguo bayana la `scope` la mwitaji hupewa kipaumbele kila wakati (Antigravity hupitisha `"exact"`).
+  kwenye uelekezaji kwa dakika 2–30 (zikiongezeka hatua kwa hatua), ilhali kikomo chake hakikuwa kimeguswa.
+- Chaguo la wazi la `scope` kutoka kwa mwitaji huwa na kipaumbele kila wakati (Antigravity hupitisha `"exact"`).
 
-**Kusudi:** kuepuka kuzima muunganisho mzima wakati modeli moja tu haipatikani au imewekewa kikomo cha matumizi.
+**Madhumuni:** kuepuka kuzima muunganisho mzima wakati modeli moja tu haipatikani au imewekewa kikomo cha matumizi.
 
 **Mifano:**
 
-- Watoa huduma wenye kiwango cha matumizi kwa kila modeli wanaorudisha 429
-- Watoa huduma wa ndani wanaorudisha 404 kwa modeli moja inayokosekana
-- Hitilafu za ruhusa za modi/modeli zinazomhusu mtoa huduma mahususi (kwa mfano, modi za Grok)
+- Watoa huduma wenye kikomo kwa kila modeli wanaorejesha 429
+- Watoa huduma wa ndani wanaorejesha 404 kwa modeli moja inayokosekana
+- Hitilafu za ruhusa za modi/modeli zinazomhusu mtoa huduma mahususi (k.m., modi za Grok)
 
 **Utekelezaji:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
@@ -237,96 +237,156 @@ Taratibu zinazohusiana hubaki tofauti:
 
 UI: Mipangilio → Vipindi vya Kusubiri vya Modeli (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Huorodhesha ufungiaji unaotumika pamoja na: mtoa huduma, muunganisho, modeli, sababu, expiresAt. Waendeshaji wanaweza kuwezesha tena modeli wenyewe kutoka kwenye kadi.
+Huorodhesha ufungiaji unaotumika pamoja na: mtoa huduma, muunganisho, modeli, sababu, expiresAt. Waendeshaji wanaweza kuwezesha tena modeli kwa mikono kutoka kwenye kadi.
 
 **REST API:**
 
 - `GET /api/resilience/model-cooldowns` — orodhesha ufungiaji unaotumika
-- `DELETE /api/resilience/model-cooldowns` — kuwezesha tena mwenyewe. Mwili: `{provider, connection, model}`. Uthibitishaji: usimamizi.
+- `DELETE /api/resilience/model-cooldowns` — wezesha tena kwa mikono. Mwili: `{provider, connection, model}`. Uthibitishaji: usimamizi.
 
-### UI ya mipangilio ya ufungiaji + urejeshaji kwa kupunguza baada ya mafanikio (v3.8.23)
+### Kidhibiti cha Vipindi vya Kusubiri
 
-Ufungiaji wa modeli ulibadilishwa kutoka tabia iliyowekwa moja kwa moja na inayotumika kila wakati hadi kuwa kipengele
-kinachoweza kusanidiwa kikamilifu, kinachohitaji kuwezeshwa kwa hiari, chenye kadi yake ya mipangilio na njia ya urejeshaji inayojirekebisha.
+UI: Ufuatiliaji → Kidhibiti cha Vipindi vya Kusubiri (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Ukurasa mmoja kwa kila muunganisho ulioondolewa kwenye uelekezaji kwa sababu ya muda mfupi, badala ya
+kufungua ukurasa wa kila mtoa huduma. Huorodhesha vipindi vya kusubiri vya miunganisho, ufungiaji wa modeli na hali
+za mwisho, huvisafisha kwa kila muunganisho, kwa chaguo fulani, au kwa miunganisho yote ya mtoa huduma,
+na huhariri kanuni za vipindi vya kusubiri zilizosanidiwa zaidi: `streamStallCooldown.enabled` na kipindi msingi cha kusubiri cha OAuth / ufunguo wa API
+cha `connectionCooldown` pamoja na idadi ya juu ya hatua za kuongeza muda (huhifadhiwa kupitia
+`PATCH /api/resilience`). Hali za mwisho (`banned`, `expired`, `credits_exhausted`)
+huorodheshwa lakini kamwe hazisafishwi hapa.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, uthibitishaji: usimamizi):
+
+- `GET /api/resilience/cooldowns[?provider=]` — miunganisho pamoja na hali, muda wa kusubiri uliosalia,
+  kiwango cha kuongeza muda, aina ya hitilafu ya mwisho na ufungiaji wa modeli (bila vitambulisho)
+- `POST /api/resilience/cooldowns` — mwili `{connectionIds: string[]}` au
+  `{all: true, provider?}`; hurejesha `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI ya mipangilio ya ufungiaji + urejeshaji kwa upunguzaji baada ya mafanikio (v3.8.23)
+
+Ufungiaji wa modeli ulibadilishwa kutoka tabia iliyowekwa moja kwa moja na inayowashwa kila wakati hadi kuwa
+kipengele kinachoweza kusanidiwa kikamilifu, kinachohitaji kuwashwa kwa hiari, chenye kadi yake ya mipangilio na njia ya urejeshaji inayojirekebisha.
 
 **Kadi ya mipangilio:** Mipangilio → Ufungiaji wa Modeli
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Hii ni **tofauti** na `ModelCooldownsCard` ya kusoma tu iliyo hapo juu (ambayo
-_huorodhesha_ tu ufungiaji unaotumika) — kadi mpya _husanidi vigezo_. Thamani chaguo-msingi
-zipo katika `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+Hii ni **tofauti** na `ModelCooldownsCard` ya kusoma pekee iliyo hapo juu (ambayo
+_huorodhesha_ tu ufungiaji unaotumika) — kadi mpya _husanidi vigezo_. Chaguomsingi
+yanapatikana katika `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Mpangilio               | Chaguo-msingi                    | Maana                                                                 |
-| ----------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Swichi kuu — ufungiaji wa modeli **umezimwa kwa chaguo-msingi**.      |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Hali za mfumo wa juu zinazohesabiwa kama hitilafu ya upeo wa modeli.  |
-| `baseCooldownMs`        | `120_000` (sekunde 120)          | Muda wa awali wa kufungiwa kwa hitilafu ya kwanza.                    |
-| `maxCooldownMs`         | `1_800_000` (dakika 30)          | Kikomo cha kipindi cha kusubiri kilichoongezwa.                       |
-| `maxBackoffSteps`       | `10`                             | Idadi ya juu ya hatua za ongezeko la kusubiri kwa kipeo.              |
-| `useExponentialBackoff` | `true`                           | Ikiwa hitilafu zinazojirudia ziongeze kipindi cha kusubiri kwa kipeo. |
+| Mpangilio               | Chaguomsingi                     | Maana                                                                              |
+| ----------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Swichi kuu — ufungiaji wa modeli **umezimwa kwa chaguomsingi**.                    |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Hali za mfumo wa juu zinazohesabiwa kama hitilafu ya upeo wa modeli.               |
+| `baseCooldownMs`        | `120_000` (sekunde 120)          | Muda wa kwanza wa ufungiaji kwa hitilafu ya kwanza.                                |
+| `maxCooldownMs`         | `1_800_000` (dakika 30)          | Kikomo cha juu cha kipindi cha kusubiri kilichoongezwa.                            |
+| `maxBackoffSteps`       | `10`                             | Idadi ya juu ya hatua za ongezeko la muda la kielelezo.                            |
+| `useExponentialBackoff` | `true`                           | Ikiwa hitilafu zinazojirudia huongeza kipindi cha kusubiri kwa namna ya kielelezo. |
 
 Mipangilio huhifadhiwa kupitia hifadhi ya kawaida ya mipangilio na kuthibitishwa kupitia
-skima ya mipangilio ya ustahimilivu; kadi huwekea mipaka `baseCooldownMs`/`maxCooldownMs`
+skima ya mipangilio ya ustahimilivu; kadi huweka mipaka ya `baseCooldownMs`/`maxCooldownMs`
 (huku `maxCooldownMs ≥ baseCooldownMs`) na `maxBackoffSteps`.
 
-**Urejeshaji kwa kupunguza baada ya mafanikio:** urejeshaji **hautegemei** tu kuisha kwa kipima muda. Jibu
-lenye afya hupunguza hatua kwa hatua idadi ya hitilafu za modeli ili modeli iliyorejea katika hali nzuri
-katikati ya kipindi iache kuongezeka (na iondolewe) kabla ya kipima muda chake kuisha. Kwa lengo la
-mchanganyiko lililofaulu, `open-sse/services/combo.ts` huita `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), ambayo **hugawanya kwa mbili** `failureCount`
+**Urejeshaji kwa upunguzaji baada ya mafanikio:** urejeshaji **hautegemei** tu kuisha kwa kipima muda. Jibu
+salama hupunguza hatua kwa hatua idadi ya hitilafu za modeli ili modeli iliyorejea katika hali nzuri
+katikati ya kipindi iache kuongezeka (na isafishwe) kabla kipima muda chake hakijaisha. Lengo la mchanganyiko linapofanikiwa,
+`open-sse/services/combo.ts` huita `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), ambayo **hupunguza kwa nusu** `failureCount`
 iliyohifadhiwa (`Math.floor(failureCount / 2)`); inapofikia `0`, ingizo la ufungiaji
-hufutwa kabisa. Kitendakazi kinacholingana cha `recordModelLockoutFailure()`
-huongeza idadi hiyo (na kuongeza kipindi cha kusubiri) kwa hitilafu zinazotokea ndani ya
-dirisha la ongezeko. Upunguzaji huu baada ya mafanikio ni nyongeza ya kuisha kwa kawaida kwa kipima muda —
-njia yoyote kati ya hizo inaweza kuwezesha tena modeli.
+hufutwa kabisa. Kitendakazi sambamba `recordModelLockoutFailure()`
+huongeza idadi (na huongeza kipindi cha kusubiri) kunapotokea hitilafu ndani ya
+kipindi cha ongezeko. Upunguzaji huu baada ya mafanikio huongezea utaratibu wa kawaida wa kuisha kwa kipima muda —
+njia yoyote inaweza kuwezesha modeli tena.
 
 **Hali:** ufungiaji huhifadhiwa **kwenye kumbukumbu** (`Map` za kila mchakato za
-`ModelLockoutEntry` zenye funguo za `provider:connectionId:model`, na ufungiaji wa upeo mahususi wenye
+`ModelLockoutEntry` zikiwa na funguo za `provider:connectionId:model`, na ufungiaji wa upeo mahususi ukiwa na
 `provider:connectionId:exact:model`), hauhifadhiwi kwenye
-DB — hupotea mfumo unapoanzishwa upya. _Mipangilio_ huhifadhiwa; _hali_ ya ufungiaji
-unaotumika ni ya muda mfupi.
+DB — hupotea mfumo unapoanzishwa upya. _Mipangilio_ huhifadhiwa; _hali_ ya ufungiaji unaotumika ni ya muda mfupi.
 
 ---
 
-## 4. Udhibiti wa Uendeshaji Sambamba wa Quota-Share (v3.8.36)
+## 4. Udhibiti wa Miingiliano wa Quota-Share (v3.8.36)
 
-Akaunti za usajili (GLM, MiniMax, n.k.) mara nyingi hukubali tu takriban maombi 1–3
-kwa wakati mmoja; kuzidisha kiwango hicho husababisha hitilafu za 429 na vipindi vya kusubiri. Hali hii ni mbaya zaidi chini ya
-michanganyiko ya **quota-share** (`qtSd/…`), ambapo funguo kadhaa za API hushiriki akaunti moja ya
-upstream. Tabaka tatu huzuia akaunti inayoshirikiwa isijazwe maombi kupita kiasi.
+Akaunti za usajili (GLM, MiniMax, n.k.) mara nyingi hukubali maombi ~1–3 pekee kwa wakati mmoja; kuzidisha kiwango hicho husababisha hitilafu za 429 na vipindi vya kusubiri. Hali hii ni mbaya zaidi chini ya michanganyiko ya **quota-share** (`qtSd/…`), ambapo funguo kadhaa za API hushiriki akaunti moja ya upstream. Tabaka tatu huzuia akaunti inayoshirikiwa isijazwe maombi kupita kiasi.
 
-### Kikomo cha uendeshaji sambamba kwa kila muunganisho (`max_concurrent`)
+### Kikomo cha miingiliano kwa kila muunganisho (`max_concurrent`)
 
-Kila muunganisho wa mtoa huduma unaweza kutangaza kikomo cha `max_concurrent`
-(`provider_connections.max_concurrent`, kinachowekwa katika kidirisha cha muunganisho / API / DB).
-Kiache tupu ili kutokuwa na kikomo. Hiki ndicho kidhibiti pekee kinachoendesha tabaka la uratibu
-lililo hapa chini — kiweke kulingana na uwezo halisi wa uendeshaji sambamba wa akaunti (k.m. GLM ~1, MiniMax ~2).
+Kila muunganisho wa mtoa huduma unaweza kutangaza kikomo cha juu cha `max_concurrent`
+(`provider_connections.max_concurrent`, kinachowekwa katika dirisha la muunganisho / API / DB).
+Kiache tupu ili kutokuwa na kikomo. Hiki ndicho kipangilio kimoja kinachoendesha tabaka la uratibu
+lililo hapa chini — kiweke kulingana na kiwango halisi cha miingiliano cha akaunti (k.m. GLM ~1, MiniMax ~2).
+
+### Vikomo vya miingiliano kwa kila modeli (`modelConcurrency`)
+
+Muunganisho unaweza pia kutangaza vikomo mahususi vya miingiliano kwa kila modeli
+ndani ya ramani yake ya `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Kiweke katika dirisha la muunganisho (**Ubatilishaji wa vikomo vya kasi → Vikomo vya
+miingiliano kwa kila modeli**, `model=cap` moja kwa kila mstari) au kupitia
+`PATCH /api/providers/[id]` kwa kutumia muundo huo huo wa JSON. Maana kuu:
+
+- **Kwa muunganisho mzima dhidi ya mahususi kwa modeli:** `maxConcurrent` hubaki kuwa
+  kikomo kinachoshirikiwa cha muunganisho mzima. Vyote vinapotumika, vizuizi vyote
+  huwekwa kwa pamoja kwa njia atomiki ndani ya kizuizi kilekile changamani
+  (`global → provider → account → model`); tabia inayotekelezwa hufuata
+  kikomo kikali zaidi kinachotumika.
+- **Ulinganifu kamili wa ufunguo wa modeli:** ufunguo ni mfuatano wa modeli unaopitishwa kwa
+  kitekelezaji baada ya utatuzi wa uelekezaji — kwa kawaida ni kitambulisho cha moja kwa moja cha modeli ya upstream
+  (`glm-5`), si jina bandia la upande wa mteja la `provider/model` (`zai/glm-5`
+  halilingani na `glm-5`). Thamani ni vikomo vya maombi yanayoendeshwa kwa wakati mmoja vilivyo nambari kamili chanya.
+- **Kupanga foleni ndani ya mfumo, bila ugunduzi:** maombi yanayozidi kiwango hupangwa kwenye foleni ndani ya mfumo kwa kutumia
+  kanuni zilizopo za foleni/muda wa kusubiri (hitilafu za uidhinishaji zenye aina `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute haigundui wala kukisia sera ya upstream —
+  inatekeleza vikomo kamili vilivyosanidiwa na mwendeshaji. Kizuizi cha modeli kilichojaa
+  hakilemazi kamwe mtoa huduma wala hakisababishi kufungiwa kabisa kwa modeli; tabia ya
+  429/kipindi cha kusubiri/mbadala ya upstream hubaki kuwa kinga ya mwisho dhidi ya hitilafu.
+- **Upeo wa kila muunganisho, kwa kila mchakato:** vikomo ni vya kila muunganisho wa hifadhidata
+  na huhifadhiwa kwenye kumbukumbu, kwa hivyo miunganisho miwili inayotumia tena ufunguo uleule wa API ya upstream
+  hairatibiani.
+- **Kutoweka usanidi kunamaanisha hakuna mabadiliko:** kuacha ramani nje (au kuacha sehemu ya
+  dashibodi tupu) hakuongezi kizuizi cha modeli. Mfano wa usanidi bila
+  kudai kikomo chochote cha jumla cha mtoa huduma:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Uratibu wa maombi ya quota-share
 
 Wakati utumaji wa quota-share unalenga muunganisho unaotangaza thamani chanya ya
-`max_concurrent`, maombi yanayotumwa kwa wakati mmoja kwenye **akaunti** hiyo hupangwa kupitia
-semaphore ya kila muunganisho (ufunguo `qsconn:<connectionId>`): maombi yanayozidi **husubiri katika
-foleni** badala ya kuijaza akaunti kupita kiasi. Ni wa aina ya **fail-open** — foleni iliyojaa
-au muda wa kusubiri ulioisha huruhusu ombi kuendelea bila nafasi badala ya kukataa ombi lolote
-linaloweza kutumwa. Washa au zima katika **Mipangilio → Ustahimilivu → Uendeshaji sambamba
-kwa kila muunganisho wa quota-share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, huwashwa
-kwa chaguo-msingi). Bila kikomo cha `max_concurrent`, tabia haibadiliki.
+`max_concurrent`, maombi yanayoingia kwa wakati mmoja kwenye **akaunti** hiyo huratibiwa kupitia
+semafori ya kila muunganisho (ufunguo `qsconn:<connectionId>`): maombi ya ziada **husubiri kwenye
+foleni** badala ya kuijaza akaunti kupita kiasi. Utaratibu huu ni wa **fail-open** — foleni iliyojaa
+au muda wa kusubiri ulioisha huendelea bila nafasi badala ya kukataa ombi linaloweza kutumwa.
+Washa au zima katika **Mipangilio → Ustahimilivu → Miingiliano ya quota-share kwa kila muunganisho**
+(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, huwashwa kwa chaguo-msingi).
+Bila kikomo cha `max_concurrent`, tabia haibadiliki.
 
-> Kizuizi cha uelekezaji cha quota-share (`selectQuotaShareTarget`, DRR + P2C) chenyewe ni
-> cha aina ya fail-open na _hupunguza tu kipaumbele_ cha muunganisho uliofikia kikomo — kwa
-> kundi lenye muunganisho mmoja hakiwezi kuweka kikomo madhubuti, kwa hivyo semaphore hii ndiyo inayodhibiti
-> mafuriko ya maombi kwa vitendo.
+> Kizuizi cha uelekezaji cha quota-share (`selectQuotaShareTarget`, DRR + P2C) chenyewe ni cha
+> fail-open na _hupunguza tu kipaumbele_ cha muunganisho uliofikia kikomo — katika
+> kundi lenye muunganisho mmoja hakiwezi kuweka kikomo cha lazima, kwa hivyo semafori hii ndiyo
+> inayodhibiti mafuriko hayo ya maombi.
 
-### Jaribio upya linalozingatia kipindi cha kusubiri cha combo
+### Kujaribu tena kwa kuzingatia kipindi cha kusubiri cha combo
 
-Kwa kila mkakati wa combo (unapowashwa), ombi ambalo lingesababisha moja kwa moja hitilafu ya 429
-kwa kipindi KIFUPI cha muda cha kusubiri husubiri hadi kiishe na hutumwa upya badala ya
-kurudisha 429 — hii inashughulikia madirisha ya TPM/RPM ya aina ya Gemini (~sekunde 60 za retry-after)
+Kwa kila mkakati wa combo (unapowashwa), ombi ambalo lingesababisha 429
+kwa kipindi KIFUPI cha kusubiri cha muda husubiri kipindi hicho kiishe na hutumwa upya badala ya
+kurudisha 429 — hii inajumuisha madirisha ya TPM/RPM ya aina ya Gemini (~60s retry-after)
 kwenye combo za modeli nyingi, k.m. malengo yote mawili ya combo ya modeli 2 yanapofikia kikomo cha kasi
 cha kila modeli. Huwekewa mipaka na `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
 `budgetMs`) katika **Mipangilio → Ustahimilivu**. Haisubiri kamwe kwa `quota_exhausted`
-(imefungwa hadi usiku wa manane) au sababu za uthibitishaji/kutopatikana.
+(imefungwa hadi usiku wa manane) au sababu za uthibitishaji/haijapatikana.
 
 ---
 

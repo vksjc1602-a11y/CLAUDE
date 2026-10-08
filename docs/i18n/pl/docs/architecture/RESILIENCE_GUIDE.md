@@ -206,30 +206,32 @@ Powiązane mechanizmy pozostają odrębne:
 
 ## 3. Blokada modelu
 
-**Zakres:** kombinacja dostawcy + połączenia + modelu.
+**Zakres:** trójka provider + connection + model.
 
-**Zakres klucza według statusu:** status błędu określa, do którego klucza zostanie zapisana blokada
-(`resolveLockoutScope()` w `open-sse/services/accountFallback/exactModelLock.ts`):
+**Zakres klucza według statusu:** status błędu określa, do którego klucza zostanie
+zapisana blokada (`resolveLockoutScope()` w `open-sse/services/accountFallback/exactModelLock.ts`):
 
 - `429` / `403` / `402` — sygnał limitu lub uprawnień — blokuje **rodzinę limitów**:
-  dla codex cały zakres `codex` / `spark` (każdy model `gpt-5*` danego
-  połączenia), a dla innych dostawców zakres zwracany przez `getQuotaScopedModelForProvider()`.
+  w przypadku codex cały zakres `codex` / `spark` (każdy model `gpt-5*` danego
+  połączenia), a dla innych dostawców `getQuotaScopedModelForProvider()`.
 - `404` blokuje sam model (`getModelLockKey()` zawęża `not_found`).
 - Każdy inny status — błędy transportu/serwera `5xx` oraz własny, syntetyzowany
-  przez OmniRoute status `502` z walidacji jakości — blokuje wyłącznie **dokładną**
-  kombinację dostawcy/połączenia/modelu. Nieprawidłowy strumień dla jednego modelu nie świadczy
-  o limicie konta; przed wprowadzeniem tej reguły jedna pusta odpowiedź z
-  `codex/gpt-5.6-luna` usuwała wszystkie modele `gpt-5*` tego połączenia
-  z routingu na 2–30 min (z eskalacją), mimo że jego limit pozostawał niewykorzystany.
-- Jawna opcja `scope` wywołującego zawsze ma pierwszeństwo (Antigravity przekazuje `"exact"`).
+  przez OmniRoute status `502` pochodzący z walidacji jakości — blokuje tylko
+  **dokładną** trójkę dostawca/połączenie/model. Nieprawidłowy strumień w jednym
+  modelu nie świadczy o limicie konta; przed wprowadzeniem tej reguły jedna pusta
+  odpowiedź z `codex/gpt-5.6-luna` usuwała z routingu każdy model `gpt-5*` tego
+  połączenia na 2–30 min (ze stopniowym wydłużaniem), mimo że jego limit
+  pozostawał nienaruszony.
+- Jawna opcja `scope` podana przez wywołującego zawsze ma pierwszeństwo
+  (Antigravity przekazuje `"exact"`).
 
-**Cel:** uniknięcie wyłączania całego połączenia, gdy tylko jeden model jest niedostępny lub objęty limitem.
+**Cel:** uniknięcie wyłączania całego połączenia, gdy niedostępny lub ograniczony limitem jest tylko jeden model.
 
 **Przykłady:**
 
-- Dostawcy z limitami dla poszczególnych modeli zwracający 429
-- Lokalni dostawcy zwracający 404 dla jednego brakującego modelu
-- Błędy uprawnień specyficzne dla trybu/modelu danego dostawcy (np. tryby Grok)
+- Dostawcy z limitami na poziomie modelu zwracający 429
+- Dostawcy lokalni zwracający 404 dla jednego brakującego modelu
+- Błędy uprawnień dotyczące trybu/modelu specyficzne dla dostawcy (np. tryby Grok)
 
 **Implementacja:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
@@ -237,97 +239,119 @@ Powiązane mechanizmy pozostają odrębne:
 
 Interfejs: Ustawienia → Okresy karencji modeli (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Wyświetla aktywne blokady wraz z następującymi informacjami: dostawca, połączenie, model, przyczyna, expiresAt. Operatorzy mogą ręcznie ponownie włączyć model z poziomu karty.
+Wyświetla aktywne blokady wraz z informacjami: provider, connection, model, reason, expiresAt. Operatorzy mogą ręcznie ponownie włączyć model z poziomu karty.
 
 **REST API:**
 
 - `GET /api/resilience/model-cooldowns` — wyświetlenie aktywnych blokad
 - `DELETE /api/resilience/model-cooldowns` — ręczne ponowne włączenie. Treść: `{provider, connection, model}`. Uwierzytelnianie: zarządzanie.
 
-### Interfejs ustawień blokady + odzyskiwanie z redukcją po sukcesach (v3.8.23)
+### Menedżer okresów karencji
 
-Blokada modelu zmieniła się z zawsze aktywnego, zakodowanego na stałe mechanizmu
-w pełni konfigurowalną, opcjonalną funkcję z własną kartą ustawień i samonaprawiającą
-ścieżką odzyskiwania.
+Interfejs: Monitorowanie → Menedżer okresów karencji (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Jedna strona dla każdego połączenia wykluczonego z routingu z przyczyny tymczasowej, bez
+konieczności otwierania strony każdego dostawcy. Wyświetla okresy karencji połączeń, blokady modeli i stany
+końcowe, usuwa je dla pojedynczego połączenia, zaznaczonych połączeń lub wszystkich połączeń dostawcy,
+a także umożliwia edycję najczęściej dostrajanych reguł okresu karencji: `streamStallCooldown.enabled` oraz bazowego
+okresu karencji i maksymalnej liczby kroków wycofywania `connectionCooldown` dla OAuth / klucza API (zapisywanych przez
+`PATCH /api/resilience`). Stany końcowe (`banned`, `expired`, `credits_exhausted`) są
+wyświetlane, ale nigdy nie są tutaj usuwane.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, uwierzytelnianie: zarządzanie):
+
+- `GET /api/resilience/cooldowns[?provider=]` — połączenia wraz ze statusem, pozostałym czasem okresu karencji,
+  poziomem wycofywania, typem ostatniego błędu i blokadami modeli (bez danych uwierzytelniających)
+- `POST /api/resilience/cooldowns` — treść `{connectionIds: string[]}` lub
+  `{all: true, provider?}`; zwraca `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Interfejs ustawień blokad i odzyskiwanie przez wygaszanie po sukcesie (v3.8.23)
+
+Blokada modelu przeszła od zawsze włączonego, zakodowanego na stałe zachowania do w pełni konfigurowalnej,
+opcjonalnej funkcji z własną kartą ustawień i samonaprawiającą się ścieżką odzyskiwania.
 
 **Karta ustawień:** Ustawienia → Blokada modelu
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Jest ona **odrębna** od powyższej karty `ModelCooldownsCard` przeznaczonej tylko do odczytu (która jedynie
-_wyświetla_ aktywne blokady) — nowa karta _konfiguruje parametry_. Wartości domyślne
+Jest ona **odrębna** od znajdującej się powyżej karty `ModelCooldownsCard` przeznaczonej tylko do odczytu
+(która jedynie _wyświetla_ aktywne blokady) — nowa karta _konfiguruje parametry_. Wartości domyślne
 znajdują się w `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
 | Ustawienie              | Wartość domyślna                 | Znaczenie                                                                 |
 | ----------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Główny przełącznik — blokada modelu jest **domyślnie wyłączona**.         |
+| `enabled`               | `false`                          | Przełącznik główny — blokada modelu jest **domyślnie wyłączona**.         |
 | `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Statusy systemu nadrzędnego uznawane za błąd dotyczący modelu.            |
 | `baseCooldownMs`        | `120_000` (120 s)                | Początkowy czas blokady po pierwszym błędzie.                             |
 | `maxCooldownMs`         | `1_800_000` (30 min)             | Górny limit eskalowanego okresu karencji.                                 |
 | `maxBackoffSteps`       | `10`                             | Maksymalna liczba kroków eskalacji wykładniczego wycofywania.             |
 | `useExponentialBackoff` | `true`                           | Określa, czy powtarzające się błędy wykładniczo wydłużają okres karencji. |
 
-Ustawienia są utrwalane za pośrednictwem standardowego magazynu ustawień i walidowane
-przy użyciu schematu ustawień odporności; karta ogranicza wartości `baseCooldownMs`/`maxCooldownMs`
-(przy `maxCooldownMs ≥ baseCooldownMs`) oraz `maxBackoffSteps`.
+Ustawienia są utrwalane w standardowym magazynie ustawień i walidowane za pomocą
+schematu ustawień odporności; karta ogranicza wartości `baseCooldownMs`/`maxCooldownMs`
+(przy czym `maxCooldownMs ≥ baseCooldownMs`) oraz `maxBackoffSteps`.
 
-**Odzyskiwanie z redukcją po sukcesach:** odzyskiwanie **nie** opiera się wyłącznie na wygaśnięciu czasomierza. Prawidłowa
+**Odzyskiwanie przez wygaszanie po sukcesie:** odzyskiwanie **nie** polega wyłącznie na upływie czasu. Prawidłowa
 odpowiedź stopniowo zmniejsza licznik błędów modelu, dzięki czemu model, który odzyskał sprawność
-w trakcie okna, przestaje podlegać eskalacji (i zostaje odblokowany), zanim upłynie jego czasomierz. Po pomyślnym
-obsłużeniu celu kombinowanego `open-sse/services/combo.ts` wywołuje `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), która **dzieli przez dwa** zapisaną wartość
+w trakcie okresu blokady, przestaje podlegać eskalacji (i zostaje odblokowany), zanim upłynie jego czas. Po pomyślnej
+odpowiedzi docelowej kombinacji `open-sse/services/combo.ts` wywołuje `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), która **zmniejsza o połowę** zapisaną wartość
 `failureCount` (`Math.floor(failureCount / 2)`); gdy osiągnie ona `0`, wpis blokady
-zostaje całkowicie usunięty. Odpowiadająca jej funkcja `recordModelLockoutFailure()`
+jest całkowicie usuwany. Odpowiadająca jej funkcja `recordModelLockoutFailure()`
 zwiększa licznik (i eskaluje okres karencji) w przypadku błędów występujących w
-oknie eskalacji. Redukcja po sukcesach działa dodatkowo obok zwykłego wygaśnięcia czasomierza —
+oknie eskalacji. To wygaszanie po sukcesie uzupełnia zwykłe wygaśnięcie czasowe —
 każda z tych ścieżek może ponownie włączyć model.
 
-**Stan:** blokady są przechowywane **w pamięci** (`Map` obiektu
-`ModelLockoutEntry` osobny dla każdego procesu, z kluczami w postaci `provider:connectionId:model`, a blokady o dokładnym zakresie z kluczami
-`provider:connectionId:exact:model`) i nie są utrwalane w
-bazie danych — zostają utracone po ponownym uruchomieniu. _Ustawienia_ są utrwalane, natomiast aktywny
-_stan_ blokad jest efemeryczny.
+**Stan:** blokady są przechowywane **w pamięci** (osobne dla procesu obiekty `Map` zawierające
+`ModelLockoutEntry` z kluczami `provider:connectionId:model`, a blokady o dokładnym zakresie z kluczami
+`provider:connectionId:exact:model`), a nie utrwalane w
+bazie danych — są tracone po ponownym uruchomieniu. _Ustawienia_ są utrwalane; aktywny
+_stan_ blokad jest tymczasowy.
 
 ---
 
 ## 4. Kontrola współbieżności quota-share (v3.8.36)
 
-Konta subskrypcyjne (GLM, MiniMax itp.) często akceptują tylko około 1–3 równoczesnych
-żądań; przekroczenie tego limitu powoduje błędy 429 i okresy karencji. Problem ten jest szczególnie dotkliwy
-w przypadku kombinacji **quota-share** (`qtSd/…`), w których kilka kluczy API współdzieli jedno konto
-nadrzędne. Trzy warstwy zapobiegają przeciążeniu współdzielonego konta.
+Konta subskrypcyjne (GLM, MiniMax itp.) często akceptują tylko około 1–3 równoczesnych żądań; przekroczenie tego limitu powoduje błędy 429 i okresy karencji. Problem ten jest szczególnie dotkliwy w przypadku kombinacji **quota-share** (`qtSd/…`), gdzie kilka kluczy API współdzieli jedno konto nadrzędne. Trzy warstwy zapobiegają przeciążeniu współdzielonego konta.
 
-### Limit współbieżności dla połączenia (`max_concurrent`)
+### Limit współbieżności na połączenie (`max_concurrent`)
 
-Każde połączenie dostawcy może deklarować górny limit `max_concurrent`
-(`provider_connections.max_concurrent`, ustawiany w oknie połączenia / API / bazie danych).
-Pozostaw to pole puste, aby nie stosować limitu. Jest to jedyne ustawienie sterujące opisaną
-poniżej warstwą serializacji — ustaw je na rzeczywistą współbieżność konta (np. GLM ~1, MiniMax ~2).
+Każde połączenie dostawcy może określić limit `max_concurrent` (`provider_connections.max_concurrent`, ustawiany w oknie połączenia / przez API / w bazie danych). Pozostaw to pole puste, aby nie stosować limitu. Jest to jedyne ustawienie sterujące opisaną poniżej warstwą serializacji — ustaw je zgodnie z rzeczywistym poziomem współbieżności konta (np. GLM około 1, MiniMax około 2).
+
+### Limity współbieżności na model (`modelConcurrency`)
+
+Połączenie może dodatkowo określać dokładne limity współbieżności dla poszczególnych modeli w swojej mapie `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Ustaw je w oknie połączenia (**Nadpisania limitów szybkości → Limity współbieżności na model**, po jednym wpisie `model=limit` w każdym wierszu) lub przez `PATCH /api/providers/[id]`, używając tej samej struktury JSON. Semantyka kluczy:
+
+- **Dla całego połączenia a dla konkretnego modelu:** `maxConcurrent` pozostaje współdzielonym limitem obejmującym całe połączenie. Gdy mają zastosowanie oba limity, obie blokady są uzyskiwane atomowo w ramach tej samej złożonej blokady (`global → provider → account → model`); faktyczne działanie określa bardziej restrykcyjny z obowiązujących limitów.
+- **Dokładne dopasowanie klucza modelu:** kluczem jest ciąg modelu przekazywany do modułu wykonawczego po rozwiązaniu routingu — zwykle sam identyfikator modelu nadrzędnego (`glm-5`), a nie alias `provider/model` po stronie klienta (`zai/glm-5` nie pasuje do `glm-5`). Wartości są dodatnimi, całkowitymi limitami liczby równoczesnych żądań.
+- **Lokalne kolejkowanie, bez wykrywania:** nadmiarowe żądania są umieszczane w lokalnej kolejce zgodnie z istniejącą semantyką kolejki i limitów czasu (typowane błędy dopuszczenia `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL`). OmniRoute nie wykrywa ani nie wnioskuje zasad systemu nadrzędnego — wymusza dokładnie te limity, które skonfigurował operator. Nasycona blokada modelu nigdy nie wyłącza dostawcy ani nie powoduje trwałego zablokowania modelu; obsługa nadrzędnych błędów 429, okresów karencji i mechanizmów rezerwowych pozostaje zabezpieczeniem na wypadek błędu.
+- **Zakres na połączenie i proces:** limity dotyczą poszczególnych połączeń w bazie danych i są przechowywane w pamięci, dlatego dwa połączenia korzystające z tego samego nadrzędnego klucza API nie koordynują się ze sobą.
+- **Brak konfiguracji oznacza brak zmian:** pominięcie mapy (lub pozostawienie pustego pola w panelu) nie dodaje blokady modelu. Przykładowa konfiguracja bez zakładania jakiegokolwiek uniwersalnego limitu dostawcy:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Serializacja żądań quota-share
 
-Gdy wysłanie quota-share jest kierowane do połączenia, które deklaruje dodatnią wartość
-`max_concurrent`, równoczesne żądania do tego **konta** są serializowane za pomocą
-semafora przypisanego do połączenia (klucz `qsconn:<connectionId>`): nadmiarowe żądania **czekają
-w kolejce**, zamiast przeciążać konto. Mechanizm działa w trybie **fail-open** — w przypadku zapełnienia
-kolejki lub przekroczenia limitu czasu żądanie jest kontynuowane bez przydziału miejsca, zamiast odrzucenia
-żądania, które można wysłać. Funkcję można przełączyć w sekcji **Ustawienia → Odporność → Współbieżność
-quota-share dla połączenia** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, domyślnie
-włączone). Bez limitu `max_concurrent` zachowanie pozostaje niezmienione.
+Gdy wysłanie żądania quota-share jest kierowane do połączenia, które deklaruje dodatnią wartość `max_concurrent`, równoczesne żądania do tego **konta** są serializowane za pomocą semafora przypisanego do połączenia (klucz `qsconn:<connectionId>`): nadmiarowe żądania **czekają w kolejce**, zamiast przeciążać konto. Mechanizm ten działa w trybie **fail-open** — przepełniona kolejka lub przekroczenie limitu czasu powoduje kontynuowanie bez uzyskania miejsca, zamiast odrzucenia żądania, które można wysłać. Przełącz tę funkcję w sekcji **Ustawienia → Odporność → Współbieżność quota-share na połączenie** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, domyślnie włączona). Bez limitu `max_concurrent` zachowanie pozostaje bez zmian.
 
-> Bramka routingu quota-share (`selectQuotaShareTarget`, DRR + P2C) sama działa
-> w trybie fail-open i jedynie nadaje _niższy priorytet_ połączeniu, które osiągnęło limit — w przypadku
-> puli z jednym połączeniem nie może narzucić twardego limitu, dlatego to właśnie ten semafor faktycznie
-> ogranicza napływ żądań.
+> Bramka routingu quota-share (`selectQuotaShareTarget`, DRR + P2C) sama działa w trybie fail-open i jedynie _obniża priorytet_ połączenia, które osiągnęło limit — w puli zawierającej jedno połączenie nie może narzucić sztywnego limitu, dlatego to właśnie ten semafor faktycznie powstrzymuje zalew żądań.
 
-### Ponawianie z uwzględnieniem okresu karencji kombinacji
+### Ponawianie uwzględniające okres karencji kombinacji
 
-Dla każdej strategii kombinacji (gdy jest włączona) żądanie, które spowodowałoby utrwalenie błędu 429
-w związku z KRÓTKIM, przejściowym okresem karencji, czeka na jego zakończenie i jest ponownie wysyłane,
-zamiast zwracać błąd 429 — obejmuje to charakterystyczne dla Gemini okna TPM/RPM (około 60 s zgodnie
-z retry-after) w kombinacjach wielu modeli, np. gdy oba cele kombinacji 2 modeli osiągną limit szybkości
-dla danego modelu. Zachowanie jest ograniczone przez `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) w sekcji **Ustawienia → Odporność**. Mechanizm nigdy nie czeka w przypadku `quota_exhausted`
-(blokada do północy) ani przyczyn związanych z uwierzytelnianiem lub nieznalezieniem zasobu.
+W przypadku każdej strategii kombinacji (gdy ta funkcja jest włączona) żądanie, które spowodowałoby ostateczny błąd 429 z KRÓTKIM przejściowym okresem karencji, czeka na jego zakończenie i zostaje wysłane ponownie zamiast zwracać błąd 429 — obejmuje to okna TPM/RPM klasy Gemini (około 60 s określonych przez `retry-after`) w kombinacjach wielu modeli, np. gdy oba cele kombinacji 2 modeli osiągają limit szybkości dla danego modelu. Mechanizm jest ograniczony ustawieniami `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) w sekcji **Ustawienia → Odporność**. Nigdy nie oczekuje w przypadku `quota_exhausted` (blokady do północy) ani powodów związanych z uwierzytelnianiem lub nieznalezieniem zasobu.
 
 ---
 

@@ -207,26 +207,26 @@ OmniRoute 有三種彼此獨立但相關的韌性機制。每種機制都有不�
 
 **範圍：** 提供者 + 連線 + 模型三元組。
 
-**依狀態碼決定的鍵範圍：** 失敗狀態碼會決定鎖定要寫入哪個鍵
-（位於 `open-sse/services/accountFallback/exactModelLock.ts` 的 `resolveLockoutScope()`）：
+**依狀態決定鍵值範圍：** 失敗狀態會決定鎖定要寫入哪個鍵值
+（`open-sse/services/accountFallback/exactModelLock.ts` 中的 `resolveLockoutScope()`）：
 
 - `429` / `403` / `402` — 配額或權限訊號 — 鎖定**配額系列**：
   對 codex 而言，是整個 `codex` / `spark` 範圍（該連線的每個 `gpt-5*` 模型）；
-  對其他提供者，則使用 `getQuotaScopedModelForProvider()`。
+  對其他提供者則使用 `getQuotaScopedModelForProvider()`。
 - `404` 會鎖定原始模型（`getModelLockKey()` 會縮小 `not_found` 的範圍）。
-- 任何其他狀態碼 — `5xx` 傳輸／伺服器失敗，以及 OmniRoute 自身因品質驗證而
-  產生的 `502` — 都只會鎖定**精確的**提供者／連線／模型三元組。某個模型的
-  串流異常，不能證明帳戶配額有問題；在採用此規則之前，
-  `codex/gpt-5.6-luna` 的一次空回應會讓該連線的所有 `gpt-5*` 模型從路由中
-  移除 2–30 分鐘（逐步延長），即使其配額完全未受影響。
+- 任何其他狀態 — `5xx` 傳輸／伺服器失敗，以及 OmniRoute 本身因品質驗證而
+  合成的 `502` — 僅鎖定**確切的**提供者／連線／模型三元組。某個模型的串流異常，
+  並不能證明帳戶的配額有問題；在此規則實施之前，`codex/gpt-5.6-luna`
+  的一次空白回應，就會將該連線的所有 `gpt-5*` 模型從路由中移除
+  2–30 分鐘（逐步提升），即使其配額完全未受影響。
 - 呼叫端明確指定的 `scope` 選項一律優先（Antigravity 會傳入 `"exact"`）。
 
-**目的：** 避免在只有單一模型無法使用或受到配額限制時，停用整個連線。
+**目的：** 避免在只有一個模型無法使用或受到配額限制時，停用整條連線。
 
 **範例：**
 
-- 採用逐模型配額的提供者傳回 429
-- 本機提供者針對某個缺少的模型傳回 404
+- 傳回 429 的單模型配額提供者
+- 因單一模型缺失而傳回 404 的本機提供者
 - 提供者特定的模式／模型權限失敗（例如 Grok 模式）
 
 **實作：** `open-sse/services/accountFallback.ts` — `lockModel()`、`clearModelLock()`、`getAllModelLockouts()`。
@@ -235,82 +235,118 @@ OmniRoute 有三種彼此獨立但相關的韌性機制。每種機制都有不�
 
 UI：設定 → 模型冷卻（`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`）
 
-列出作用中的鎖定，包含：提供者、連線、模型、原因、expiresAt。操作人員可以從卡片手動重新啟用模型。
+列出作用中的鎖定，包含：提供者、連線、模型、原因、expiresAt。操作員可以從卡片手動重新啟用模型。
 
 **REST API：**
 
 - `GET /api/resilience/model-cooldowns` — 列出作用中的鎖定
-- `DELETE /api/resilience/model-cooldowns` — 手動重新啟用。本文：`{provider, connection, model}`。驗證：管理權限。
+- `DELETE /api/resilience/model-cooldowns` — 手動重新啟用。本文：`{provider, connection, model}`。驗證：management。
+
+### 冷卻管理器
+
+UI：監控 → 冷卻管理器（`src/app/(dashboard)/dashboard/resilience/cooldowns/`）。
+
+以單一頁面顯示所有因暫時性原因而退出路由的連線，而不必逐一開啟各個提供者頁面。
+此頁面會列出連線冷卻、模型鎖定與終止狀態，並可依連線、所選項目或某個提供者的
+所有連線來清除狀態；也可編輯最常調整的冷卻規則：`streamStallCooldown.enabled`，
+以及 OAuth / API 金鑰的 `connectionCooldown` 基礎冷卻時間與最大退避步數
+（透過 `PATCH /api/resilience` 儲存）。終止狀態（`banned`、`expired`、
+`credits_exhausted`）會列於此處，但絕不會在此清除。
+
+**REST API**（`src/lib/resilience/cooldownManager.ts`，驗證：management）：
+
+- `GET /api/resilience/cooldowns[?provider=]` — 具有狀態、剩餘冷卻時間、
+  退避層級、最後錯誤類型與模型鎖定的連線（不含憑證）
+- `POST /api/resilience/cooldowns` — 本文為 `{connectionIds: string[]}` 或
+  `{all: true, provider?}`；傳回 `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
 
 ### 鎖定設定 UI + 成功衰減復原 (v3.8.23)
 
-模型鎖定從永遠啟用的硬編碼行為，改為完全可設定、
-需主動選擇啟用的功能，並擁有自己的設定卡片與自我修復復原路徑。
+模型鎖定從一律啟用的硬編碼行為，改為完全可設定、
+須選擇啟用的功能，並具備自我修復的復原路徑。
 
 **設定卡片：** 設定 → 模型鎖定
 （`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`）。
-這與上述唯讀的 `ModelCooldownsCard` **不同**（後者只會
-_列出_作用中的鎖定）— 新卡片用來_設定參數_。預設值位於
-`DEFAULT_MODEL_LOCKOUT_SETTINGS`
+這與上方唯讀的 `ModelCooldownsCard` **不同**（後者只會
+_列出_作用中的鎖定）— 新卡片用於_設定參數_。預設值
+位於 `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 （`src/lib/resilience/modelLockoutSettings.ts`）：
 
 | 設定                    | 預設值                           | 意義                                   |
 | ----------------------- | -------------------------------- | -------------------------------------- |
 | `enabled`               | `false`                          | 主開關 — 模型鎖定**預設為關閉**。      |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 會被視為模型範圍失敗的上游狀態碼。     |
-| `baseCooldownMs`        | `120_000` (120 秒)               | 第一次失敗的初始鎖定時間。             |
-| `maxCooldownMs`         | `1_800_000` (30 分鐘)            | 遞增後冷卻時間的上限。                 |
-| `maxBackoffSteps`       | `10`                             | 指數退避遞增的最大步數。               |
-| `useExponentialBackoff` | `true`                           | 重複失敗時是否以指數方式延長冷卻時間。 |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 會計為模型範圍失敗的上游狀態。         |
+| `baseCooldownMs`        | `120_000` (120 秒)               | 第一次失敗的初始鎖定持續時間。         |
+| `maxCooldownMs`         | `1_800_000` (30 分鐘)            | 提升後冷卻時間的上限。                 |
+| `maxBackoffSteps`       | `10`                             | 指數退避提升的最大步數。               |
+| `useExponentialBackoff` | `true`                           | 重複失敗時是否以指數方式提升冷卻時間。 |
 
-設定會透過一般設定儲存區持久保存，並經由韌性設定結構描述進行驗證；卡片會限制 `baseCooldownMs`／`maxCooldownMs`
-（其中 `maxCooldownMs ≥ baseCooldownMs`）以及 `maxBackoffSteps`。
+設定會透過一般設定儲存區持久保存，並經由
+韌性設定結構描述進行驗證；卡片會限制 `baseCooldownMs`/`maxCooldownMs`
+（其中 `maxCooldownMs ≥ baseCooldownMs`）及 `maxBackoffSteps`。
 
-**成功衰減復原：** 復原**不只是**等待計時器到期。健康的
-回應會逐步降低模型的失敗次數，讓在時限內恢復的模型能在計時器到期前
-停止遞增（並解除鎖定）。當組合目標成功時，`open-sse/services/combo.ts` 會呼叫 `decayModelFailureCount()`
+**成功衰減復原：** 復原**不只**依賴計時器到期。健康的回應會逐步降低
+模型的失敗計數，因此在時間窗期間恢復的模型，會在計時器原定到期前
+停止提升冷卻時間（並解除鎖定）。當組合目標成功時，
+`open-sse/services/combo.ts` 會呼叫 `decayModelFailureCount()`
 （`open-sse/services/accountFallback.ts`），將儲存的
 `failureCount` **減半**（`Math.floor(failureCount / 2)`）；當其達到 `0` 時，
-鎖定項目會被完全刪除。相對應的 `recordModelLockoutFailure()`
-會在遞增時間範圍內發生失敗時增加計數（並延長冷卻時間）。
+鎖定項目會被完全刪除。對應的 `recordModelLockoutFailure()`
+會在提升時間窗內發生失敗時增加計數（並提升冷卻時間）。
 此成功衰減機制是單純計時器到期之外的額外機制 —
-任一路徑都可以重新啟用模型。
+任一路徑皆可重新啟用模型。
 
-**狀態：** 鎖定保存在**記憶體中**（每個處理程序各自擁有以
-`provider:connectionId:model` 為鍵的 `ModelLockoutEntry` `Map`，精確範圍鎖定則以
-`provider:connectionId:exact:model` 為鍵），不會持久保存至
-資料庫 — 重新啟動後便會遺失。_設定_會持久保存；作用中的
+**狀態：** 鎖定會保留在**記憶體內**（每個程序各自維護以
+`provider:connectionId:model` 為鍵值的 `ModelLockoutEntry` `Map`；
+確切範圍的鎖定則以 `provider:connectionId:exact:model` 為鍵值），不會持久保存至
+DB — 重新啟動後即會遺失。_設定_會持久保存；作用中的
 鎖定_狀態_則是暫時性的。
 
 ---
 
 ## 4. 配額共享並行控制 (v3.8.36)
 
-訂閱帳戶（GLM、MiniMax 等）通常僅接受約 1–3 個並行請求；超過此限制會觸發 429 與冷卻。此問題在 **quota-share** (`qtSd/…`) 組合中特別明顯，因為多個 API 金鑰會共用同一個上游帳戶。以下三個層級可防止共享帳戶遭大量請求淹沒。
+訂閱帳戶（GLM、MiniMax 等）通常僅接受約 1–3 個並行請求；超出限制會觸發 429 錯誤與冷卻期。此問題在 **配額共享**（`qtSd/…`）組合中特別明顯，因為多個 API 金鑰會共享同一個上游帳戶。以下三層機制可防止共享帳戶被大量請求淹沒。
 
-### 各連線的並行上限 (`max_concurrent`)
+### 每連線並行上限（`max_concurrent`）
 
-每個提供者連線都可以宣告 `max_concurrent` 上限
-（`provider_connections.max_concurrent`，可在連線對話框／API／DB 中設定）。
-留空即表示不設限制。這是驅動下方序列化層的唯一設定項目——請將其設為帳戶的實際並行能力（例如 GLM 約為 1，MiniMax 約為 2）。
+每個提供者連線都可以宣告 `max_concurrent` 上限（`provider_connections.max_concurrent`，可在連線彈出視窗 / API / DB 中設定）。留空表示不設限制。這是驅動下述序列化層的單一控制項——請將其設為帳戶的實際並行處理能力（例如 GLM 約為 1、MiniMax 約為 2）。
+
+### 每模型並行上限（`modelConcurrency`）
+
+連線還可以在其 `rateLimitOverrides` 對應表內，額外宣告精確的每模型並行上限：
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+可在連線彈出視窗中設定（**速率限制覆寫 → 每模型並行上限**，每行一個 `model=cap`），或透過具有相同 JSON 結構的 `PATCH /api/providers/[id]` 進行設定。鍵值語意如下：
+
+- **連線整體與模型特定限制：** `maxConcurrent` 仍是連線整體的共享上限。當兩者同時適用時，會在同一個複合閘門中以不可分割的方式取得這兩道閘門（`全域 → 提供者 → 帳戶 → 模型`）；實際行為以較嚴格的適用限制為準。
+- **精確比對模型鍵：** 鍵是路由解析後傳遞給執行器的模型字串——通常是純上游模型 ID（`glm-5`），而不是用戶端的 `provider/model` 別名（`zai/glm-5` 不會與 `glm-5` 相符）。值必須是正整數的並行請求上限。
+- **本機排隊，不自動探索：** 超額請求會依照現有的佇列／逾時語意在本機排隊（具類型的 `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL` 准入錯誤）。OmniRoute 不會探索或推斷上游政策——它只會強制執行操作人員設定的確切上限。飽和的模型閘門絕不會停用提供者，也不會造成永久性的模型鎖定；上游 429／冷卻／備援行為仍是最後的錯誤防線。
+- **每連線、每處理程序範圍：** 上限以每個資料庫連線為單位，並保存在記憶體中，因此重複使用同一上游 API 金鑰的兩個連線不會彼此協調。
+- **未設定即維持原狀：** 省略此對應表（或將儀表板欄位留空）不會新增模型閘門。以下為未主張任何通用提供者限制的設定範例：
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### 配額共享請求序列化
 
-當 quota-share 分派的目標連線宣告了正數的 `max_concurrent` 時，傳送至該**帳戶**的並行請求會透過各連線專屬的 semaphore（鍵值為 `qsconn:<connectionId>`）進行序列化：超額請求會**在佇列中等待**，而不是淹沒帳戶。此機制採用**失敗時開放**策略——當佇列已飽和或逾時時，請求會在未取得名額的情況下繼續，而不會拒絕任何可分派的請求。可在**設定 → 韌性 → 配額共享的各連線並行控制**
-（`resilienceSettings.quotaShareConcurrencyLimit.enabled`，預設啟用）中切換。若未設定 `max_concurrent` 上限，行為將維持不變。
+當配額共享分派的目標連線宣告了正數的 `max_concurrent` 時，傳送至該**帳戶**的並行請求會透過每連線一個的號誌機制（鍵為 `qsconn:<connectionId>`）進行序列化：超額請求會**在佇列中等待**，而不會以大量請求淹沒帳戶。此機制採用**開放式失敗**——佇列飽和或逾時時，請求會在未取得名額的情況下繼續執行，而不會拒絕任何可分派的請求。可在**設定 → 韌性 → 配額共享的每連線並行控制**中切換（`resilienceSettings.quotaShareConcurrencyLimit.enabled`，預設開啟）。若未設定 `max_concurrent` 上限，行為則維持不變。
 
-> quota-share 路由閘門（`selectQuotaShareTarget`、DRR + P2C）本身也採用
-> 失敗時開放策略，且只會降低已達上限連線的優先級——若集區中只有單一連線，
-> 它便無法實施硬性限制，因此實際抑制大量請求的是此 semaphore。
+> 配額共享路由閘門（`selectQuotaShareTarget`、DRR + P2C）本身採用開放式失敗，且只會對已達上限的連線進行_降優先級_處理——若集區中只有一個連線，它便無法進行硬性限制，因此真正控制請求洪流的是這個號誌機制。
 
 ### 感知組合冷卻狀態的重試
 
-對於所有組合策略（啟用時），若某個請求會因短暫的暫時性冷卻而確定產生 429，
-系統會等待冷卻結束並重新分派，而不是傳回 429——這涵蓋多模型組合中的
-Gemini 類 TPM/RPM 時間窗（`retry-after` 約 60 秒），例如雙模型組合的兩個目標
-都觸及各模型的速率限制。此行為受**設定 → 韌性**中的
-`comboCooldownWait`（`enabled`、`maxWaitMs`、`maxAttempts`、`budgetMs`）限制。
-對於 `quota_exhausted`（鎖定至午夜）或驗證／找不到等原因，系統絕不等待。
+對於每一種組合策略（啟用時），若某項請求會因短暫的「短期」冷卻而確定產生 429，系統會等待冷卻結束並重新分派，而非直接傳回 429——這涵蓋多模型組合中的 Gemini 類 TPM/RPM 時間窗（約 60 秒的 retry-after），例如雙模型組合的兩個目標都達到每模型速率限制。其範圍受**設定 → 韌性**中的 `comboCooldownWait`（`enabled`、`maxWaitMs`、`maxAttempts`、`budgetMs`）約束。對於 `quota_exhausted`（鎖定至午夜）或驗證／找不到等原因，系統絕不會等待。
 
 ---
 

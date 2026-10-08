@@ -222,127 +222,153 @@ Aiheeseen liittyvät mekanismit pysyvät erillisinä:
 
 ## 3. Mallin lukitus
 
-**Kattavuus:** palveluntarjoajan, yhteyden ja mallin muodostama kolmikko.
+**Laajuus:** palveluntarjoajan, yhteyden ja mallin yhdistelmä.
 
-**Avaimen kattavuus tilan mukaan:** virhetilakoodi määrittää, mihin avaimeen lukitus
-kirjoitetaan (`resolveLockoutScope()` tiedostossa `open-sse/services/accountFallback/exactModelLock.ts`):
+**Avaimen laajuus tilan mukaan:** virhetilakoodi määrittää, mihin avaimeen lukitus kirjoitetaan
+(`resolveLockoutScope()` tiedostossa `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — kiintiö- tai käyttöoikeussignaali — lukitsee **kiintiöperheen**:
-  codexin tapauksessa yhteyden koko `codex`- / `spark`-alueen (kaikki yhteyden
-  `gpt-5*`-mallit), muilla palveluntarjoajilla `getQuotaScopedModelForProvider()`.
-- `404` lukitsee yksittäisen mallin (`getModelLockKey()` rajaa `not_found`-tilanteen).
-- Mikä tahansa muu tila — `5xx`-siirto-/palvelinvirheet ja OmniRouten laadun
-  validoinnista itse muodostama `502` — lukitsee vain **tarkan**
-  palveluntarjoaja/yhteys/malli-kolmikon. Yhden mallin virheellinen tietovirta ei
-  ole näyttöä tilin kiintiöstä; ennen tätä sääntöä yksi tyhjä vastaus mallilta
-  `codex/gpt-5.6-luna` poisti yhteyden kaikki `gpt-5*`-mallit
-  reitityksestä 2–30 minuutiksi (pitenevästi), vaikka sen kiintiöön ei ollut koskettu.
-- Kutsujan eksplisiittinen `scope`-valinta on aina etusijalla (Antigravity välittää arvon `"exact"`).
+- `429` / `403` / `402` — kiintiöön tai käyttöoikeuteen liittyvä signaali — lukitsee **kiintiöperheen**:
+  codexin tapauksessa koko `codex`- / `spark`-laajuuden (yhteyden kaikki `gpt-5*`-mallit),
+  muilla palveluntarjoajilla `getQuotaScopedModelForProvider()`.
+- `404` lukitsee pelkän mallin (`getModelLockKey()` rajaa `not_found`-tilan).
+- Mikä tahansa muu tila — `5xx`-siirto-/palvelinvirheet sekä OmniRouten laadunvarmistuksen
+  itse muodostama `502` — lukitsee vain **täsmällisen**
+  palveluntarjoajan, yhteyden ja mallin yhdistelmän. Yhden mallin viallinen virta ei ole todiste
+  tilin kiintiöstä; ennen tätä sääntöä yksi tyhjä vastaus mallista
+  `codex/gpt-5.6-luna` poisti kyseisen yhteyden kaikki `gpt-5*`-mallit
+  reitityksestä 2–30 minuutiksi (porrastetusti), vaikka kiintiö ei ollut muuttunut.
+- Kutsujan nimenomaisesti määrittämä `scope`-valinta ohittaa aina muut säännöt (Antigravity välittää arvon `"exact"`).
 
 **Tarkoitus:** estää koko yhteyden poistaminen käytöstä, kun vain yksi malli ei ole käytettävissä tai sen kiintiö on rajoitettu.
 
 **Esimerkkejä:**
 
-- Mallikohtaisten kiintiöiden palveluntarjoajat, jotka palauttavat tilan 429
-- Paikalliset palveluntarjoajat, jotka palauttavat tilan 404 yhdestä puuttuvasta mallista
-- Palveluntarjoajakohtaiset tila-/mallikohtaiset käyttöoikeusvirheet (esim. Grok-tilat)
+- Mallikohtaista kiintiötä käyttävät palveluntarjoajat, jotka palauttavat tilan 429
+- Paikalliset palveluntarjoajat, jotka palauttavat tilan 404 yhden puuttuvan mallin vuoksi
+- Palveluntarjoajakohtaiset tila-/mallikäyttöoikeusvirheet (esim. Grok-tilat)
 
 **Toteutus:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Mallien jäähyjen hallintapaneeli (v3.8.0)
+### Mallien jäähdytysten hallintapaneeli (v3.8.0)
 
-Käyttöliittymä: Asetukset → Mallien jäähyt (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Käyttöliittymä: Asetukset → Mallien jäähdytykset (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Luettelee aktiiviset lukitukset ja näyttää seuraavat tiedot: provider, connection, model, reason, expiresAt. Ylläpitäjät voivat ottaa mallin manuaalisesti uudelleen käyttöön kortista.
+Luettelee aktiiviset lukitukset ja näyttää seuraavat tiedot: palveluntarjoaja, yhteys, malli, syy ja expiresAt. Operaattorit voivat ottaa mallin manuaalisesti uudelleen käyttöön kortista.
 
-**REST-rajapinta:**
+**REST API:**
 
 - `GET /api/resilience/model-cooldowns` — luettelee aktiiviset lukitukset
 - `DELETE /api/resilience/model-cooldowns` — manuaalinen uudelleenkäyttöönotto. Runko: `{provider, connection, model}`. Todennus: hallinta.
 
-### Lukitusasetusten käyttöliittymä + onnistumisiin perustuva palautuminen (v3.8.23)
+### Jäähdytysten hallinta
 
-Mallin lukitus muuttui aina käytössä olleesta, kovakoodatusta toiminnasta täysin
-määritettäväksi, erikseen käyttöön otettavaksi ominaisuudeksi, jolla on oma asetuskorttinsa ja itsekorjautuva palautumispolku.
+Käyttöliittymä: Valvonta → Jäähdytysten hallinta (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Yksi sivu kaikille yhteyksille, jotka on poistettu reitityksestä tilapäisen syyn vuoksi, jotta
+jokaista palveluntarjoajasivua ei tarvitse avata erikseen. Se luettelee yhteyksien jäähdytykset, mallien lukitukset ja lopulliset
+tilat, tyhjentää ne yhteyskohtaisesti, valinnalle tai palveluntarjoajan kaikille yhteyksille
+sekä muokkaa eniten hienosäädettyjä jäähdytyssääntöjä: `streamStallCooldown.enabled` ja OAuth-/API-avainpohjaisen
+`connectionCooldown`-asetuksen perusjäähdytystä sekä vastaviiveen enimmäisaskelmäärää (tallennetaan
+`PATCH /api/resilience` -pyynnöllä). Lopulliset tilat (`banned`, `expired`, `credits_exhausted`)
+luetellaan, mutta niitä ei koskaan tyhjennetä täällä.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, todennus: hallinta):
+
+- `GET /api/resilience/cooldowns[?provider=]` — yhteydet sekä niiden tila, jäljellä oleva jäähdytys,
+  vastaviivetaso, viimeisin virhetyyppi ja mallien lukitukset (ei tunnistetietoja)
+- `POST /api/resilience/cooldowns` — runko `{connectionIds: string[]}` tai
+  `{all: true, provider?}`; palauttaa `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Lukitusasetusten käyttöliittymä ja onnistumisiin perustuva palautuminen (v3.8.23)
+
+Mallien lukitus muuttui aina käytössä olleesta kiinteästi koodatusta toiminnasta täysin määritettäväksi,
+erikseen käyttöön otettavaksi ominaisuudeksi, jolla on oma asetuskorttinsa ja itsekorjautuva palautumispolku.
 
 **Asetuskortti:** Asetukset → Mallin lukitus
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Tämä **eroaa** yllä olevasta vain luku -muotoisesta `ModelCooldownsCard`-kortista
-(joka ainoastaan _luettelee_ aktiiviset lukitukset) — uusi kortti _määrittää parametrit_. Oletusarvot
-ovat `DEFAULT_MODEL_LOCKOUT_SETTINGS`-vakiossa
+Tämä **eroaa** yllä olevasta vain luku -tilassa olevasta `ModelCooldownsCard`-kortista (joka ainoastaan
+_luettelee_ aktiiviset lukitukset) — uusi kortti _määrittää parametrit_. Oletusarvot
+ovat kohteessa `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
 | Asetus                  | Oletusarvo                       | Merkitys                                                          |
 | ----------------------- | -------------------------------- | ----------------------------------------------------------------- |
 | `enabled`               | `false`                          | Pääkytkin — mallin lukitus on **oletusarvoisesti pois käytöstä**. |
 | `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Ylävirran tilakoodit, jotka lasketaan mallikohtaisiksi virheiksi. |
-| `baseCooldownMs`        | `120_000` (120 s)                | Ensimmäisen virheen alkuperäinen lukitusaika.                     |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Pidentyneen jäähyn yläraja.                                       |
-| `maxBackoffSteps`       | `10`                             | Eksponentiaalisen viiveen pidennyksen enimmäisvaiheiden määrä.    |
-| `useExponentialBackoff` | `true`                           | Pidentävätkö toistuvat virheet jäähyä eksponentiaalisesti.        |
+| `baseCooldownMs`        | `120_000` (120 s)                | Ensimmäisen virheen lukituksen alkuperäinen kesto.                |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Porrastetun jäähdytyksen yläraja.                                 |
+| `maxBackoffSteps`       | `10`                             | Eksponentiaalisen vastaviiveen eskaloinnin enimmäisaskelmäärä.    |
+| `useExponentialBackoff` | `true`                           | Kasvattavatko toistuvat virheet jäähdytystä eksponentiaalisesti.  |
 
-Asetukset säilytetään normaalissa asetussäilössä ja validoidaan
-resilienssiasetusten skeemalla; kortti rajoittaa arvoja `baseCooldownMs`/`maxCooldownMs`
-(ehdolla `maxCooldownMs ≥ baseCooldownMs`) ja `maxBackoffSteps`.
+Asetukset säilytetään normaalissa asetusvarastossa ja validoidaan
+resilienssiasetusten skeemalla; kortti rajaa `baseCooldownMs`-/`maxCooldownMs`-arvot
+(ehdolla `maxCooldownMs ≥ baseCooldownMs`) sekä `maxBackoffSteps`-arvon.
 
 **Onnistumisiin perustuva palautuminen:** palautuminen **ei** perustu pelkästään ajastimen umpeutumiseen. Toimiva
-vastaus pienentää mallin virhelaskuria, joten kesken aikajakson palautuneen mallin
-lukitusaika lakkaa pitenemästä (ja lukitus poistuu) ennen ajastimen umpeutumista. Kun yhdistelmäkohde
-onnistuu, `open-sse/services/combo.ts` kutsuu funktiota `decayModelFailureCount()`
+vastaus pienentää mallin virhemäärää asteittain, joten kesken aikajakson palautunut malli
+lakkaa eskaloitumasta (ja sen lukitus poistuu) ennen ajastimen umpeutumista. Kun yhdistelmäkohde onnistuu,
+`open-sse/services/combo.ts` kutsuu funktiota `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), joka **puolittaa** tallennetun
-`failureCount`-arvon (`Math.floor(failureCount / 2)`); kun se saavuttaa arvon `0`, lukitusmerkintä
-poistetaan kokonaan. Vastinpari `recordModelLockoutFailure()`
-kasvattaa laskuria (ja pidentää jäähyä), kun virheitä tapahtuu
-pidennysikkunan aikana. Tämä onnistumisiin perustuva palautuminen täydentää tavallista ajastimen umpeutumista —
+`failureCount`-arvon (`Math.floor(failureCount / 2)`); kun arvo saavuttaa arvon `0`, lukitusmerkintä
+poistetaan kokonaan. Vastinfunktio `recordModelLockoutFailure()`
+kasvattaa määrää (ja porrastaa jäähdytystä) eskalointi-ikkunan aikana tapahtuvien virheiden yhteydessä.
+Tämä onnistumisiin perustuva palautuminen täydentää tavallista ajastimen umpeutumista —
 kumpi tahansa polku voi ottaa mallin uudelleen käyttöön.
 
-**Tila:** lukituksia säilytetään **muistissa** (prosessikohtaiset `Map`-rakenteet,
-joissa `ModelLockoutEntry`-arvot on avaimettu muodossa `provider:connectionId:model` ja tarkan kattavuuden lukitukset muodossa
+**Tila:** lukitukset säilytetään **muistissa** (prosessikohtaiset `Map`-rakenteet,
+joiden `ModelLockoutEntry`-arvot on avaimettu muodossa `provider:connectionId:model` ja täsmällisen laajuuden lukitukset muodossa
 `provider:connectionId:exact:model`), eikä niitä tallenneta
-tietokantaan — ne menetetään uudelleenkäynnistyksen yhteydessä. _Asetukset_ säilytetään pysyvästi; aktiivinen
+tietokantaan — ne menetetään uudelleenkäynnistyksen yhteydessä. _Asetukset_ säilytetään; aktiivinen
 lukitus_tila_ on tilapäinen.
 
 ---
 
-## 4. Kiintiönjaon rinnakkaisuuden hallinta (v3.8.36)
+## 4. Quota-sharen rinnakkaisuuden hallinta (v3.8.36)
 
-Tilauspohjaiset tilit (GLM, MiniMax jne.) hyväksyvät usein vain noin 1–3 samanaikaista
-pyyntöä; tämän rajan ylittäminen aiheuttaa 429-virheitä ja jäähdytysjaksoja. Tämä korostuu
-**kiintiönjako-** (`qtSd/…`)yhdistelmissä, joissa useat API-avaimet jakavat saman ulkoisen
-tilin. Kolme tasoa estää jaetun tilin kuormittamisen liiallisilla pyynnöillä.
+Tilauspohjaiset tilit (GLM, MiniMax jne.) hyväksyvät usein vain noin 1–3 samanaikaista pyyntöä; rajan ylittäminen aiheuttaa 429-virheitä ja jäähdytysjaksoja. Tämä korostuu **quota-share**-yhdistelmissä (`qtSd/…`), joissa useat API-avaimet jakavat yhden upstream-tilin. Kolme kerrosta estää jaetun tilin ylikuormittamisen.
 
 ### Yhteyskohtainen rinnakkaisuusraja (`max_concurrent`)
 
-Kullekin palveluntarjoajayhteydelle voidaan määrittää `max_concurrent`-yläraja
-(`provider_connections.max_concurrent`, määritetään yhteyden valintaikkunassa / API:ssa / tietokannassa).
-Jätä se tyhjäksi, jos et halua rajoitusta. Tämä on ainoa asetus, joka ohjaa alla olevaa
-sarjallistamiskerrosta — aseta arvoksi tilin todellinen rinnakkaisuusraja (esim. GLM noin 1, MiniMax noin 2).
+Jokaiselle palveluntarjoajayhteydelle voidaan määrittää `max_concurrent`-yläraja (`provider_connections.max_concurrent`, asetetaan yhteyden valintaikkunassa / API:ssa / tietokannassa). Jätä se tyhjäksi, jos et halua rajoitusta. Tämä on ainoa asetus, joka ohjaa alla kuvattua sarjallistamiskerrosta — aseta arvoksi tilin todellinen rinnakkaisuusraja (esim. GLM noin 1, MiniMax noin 2).
 
-### Kiintiönjakopyyntöjen sarjallistaminen
+### Mallikohtaiset rinnakkaisuusrajat (`modelConcurrency`)
 
-Kun kiintiönjakovälitys kohdistuu yhteyteen, jolle on määritetty positiivinen
-`max_concurrent`-arvo, kyseiselle **tilille** lähetettävät samanaikaiset pyynnöt sarjallistetaan
-yhteyskohtaisen semaforin kautta (avain `qsconn:<connectionId>`): ylimääräiset pyynnöt **odottavat
-jonossa** sen sijaan, että ne kuormittaisivat tiliä liikaa. Toiminta on **häiriötilanteessa salliva**:
-täysi jono tai aikakatkaisu johtaa jatkamiseen ilman paikkaa sen sijaan, että välityskelpoinen
-pyyntö koskaan hylättäisiin. Ota toiminto käyttöön tai poista se käytöstä kohdassa **Asetukset → Häiriönsietokyky → Kiintiönjaon yhteyskohtainen
-rinnakkaisuus** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, oletusarvoisesti
-käytössä). Ilman `max_concurrent`-rajaa toiminta säilyy ennallaan.
+Yhteydelle voidaan lisäksi määrittää tarkat mallikohtaiset rinnakkaisuusrajat sen `rateLimitOverrides`-määrityksessä:
 
-> Kiintiönjaon reititysportti (`selectQuotaShareTarget`, DRR + P2C) on itsessään
-> häiriötilanteessa salliva ja vain _alentaa prioriteettia_ yhteydeltä, joka on saavuttanut rajansa — yhden
-> yhteyden varannossa se ei voi asettaa ehdotonta rajaa, joten juuri tämä semafori
-> estää pyyntötulvan.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### Yhdistelmän jäähdytysjakson huomioiva uudelleenyritys
+Aseta se yhteyden valintaikkunassa (**Pyyntönopeusrajojen ohitukset → Mallikohtaiset rinnakkaisuusrajat**, yksi `model=cap` riviä kohden) tai kutsumalla `PATCH /api/providers/[id]` samalla JSON-rakenteella. Avainten semantiikka:
 
-Kun toiminto on käytössä, jokaisessa yhdistelmästrategiassa pyyntö, joka muutoin johtaisi lopulliseen 429-virheeseen
-LYHYEN tilapäisen jäähdytysjakson vuoksi, odottaa jakson päättymistä ja välitetään uudelleen sen sijaan, että
-429-virhe palautettaisiin — tämä kattaa Gemini-tyyppiset TPM/RPM-aikaikkunat (noin 60 sekunnin retry-after)
-usean mallin yhdistelmissä, esimerkiksi kun kaksimallisen yhdistelmän molemmat kohteet saavuttavat mallikohtaisen
-nopeusrajoituksen. Toimintaa rajoittaa **Asetukset → Häiriönsietokyky** -kohdan `comboCooldownWait`
-(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`). Se ei koskaan odota syyn ollessa `quota_exhausted`
-(lukittu keskiyöhön asti) eikä todennukseen tai puuttuvaan resurssiin liittyvissä tapauksissa.
+- **Yhteydenlaajuinen vs. mallikohtainen:** `maxConcurrent` säilyy yhteisenä yhteydenlaajuisena ylärajana. Kun molempia sovelletaan, molemmat portit hankitaan atomisesti samassa yhdistelmäportissa (`global → provider → account → model`); käytännössä tiukempi sovellettava raja määrää toiminnan.
+- **Mallin avaimen tarkka vastaavuus:** avain on suorittajalle reitityksen ratkaisun jälkeen välitetty mallimerkkijono — tavallisesti upstream-mallin pelkkä tunnus (`glm-5`), ei asiakaspuolen `provider/model`-alias (`zai/glm-5` ei vastaa arvoa `glm-5`). Arvojen on oltava positiivisia kokonaislukuja, jotka määrittävät samanaikaisten pyyntöjen ylärajat.
+- **Paikallinen jonotus, ei automaattista tunnistusta:** ylimääräiset pyynnöt jonottavat paikallisesti nykyisten jono- ja aikakatkaisukäytäntöjen mukaisesti (tyypitetyt `SEMAPHORE_TIMEOUT`- / `SEMAPHORE_QUEUE_FULL`-hyväksyntävirheet). OmniRoute ei tunnista tai päättele upstream-käytäntöä — se valvoo täsmälleen operaattorin määrittämiä rajoja. Täynnä oleva malliportti ei koskaan poista palveluntarjoajaa käytöstä eikä koskaan aiheuta mallille pysyvää lukitusta; upstream-palvelun 429-/jäähdytys-/varajärjestelytoiminta säilyy viimeisenä virheenkäsittelykeinona.
+- **Yhteys- ja prosessikohtainen soveltamisala:** rajat ovat tietokantayhteyskohtaisia ja ne säilytetään muistissa, joten kaksi samaa upstream-API-avainta käyttävää yhteyttä eivät koordinoi toimintaansa keskenään.
+- **Määrittämättä jättäminen ei muuta toimintaa:** määrityksen pois jättäminen (tai hallintapaneelin kentän jättäminen tyhjäksi) ei lisää malliporttia. Esimerkkimääritys ilman väitettä yleispätevästä palveluntarjoajarajasta:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Quota-share-pyyntöjen sarjallistaminen
+
+Kun quota-share-välitys kohdistuu yhteyteen, joka määrittää positiivisen `max_concurrent`-arvon, kyseiselle **tilille** lähetettävät samanaikaiset pyynnöt sarjallistetaan yhteyskohtaisen semaforin kautta (avain `qsconn:<connectionId>`): ylimääräiset pyynnöt **odottavat jonossa** tilin ylikuormittamisen sijaan. Toiminta on **fail-open**-periaatteen mukaista — täynnä oleva jono tai aikakatkaisu jatkaa ilman varattua paikkaa sen sijaan, että välitettävissä oleva pyyntö koskaan hylättäisiin. Ota käyttöön tai poista käytöstä kohdassa **Asetukset → Häiriönsieto → Quota-sharen yhteyskohtainen rinnakkaisuus** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, oletusarvoisesti käytössä). Ilman `max_concurrent`-rajaa toiminta ei muutu.
+
+> Quota-sharen reititysportti (`selectQuotaShareTarget`, DRR + P2C) toimii itsessään
+> fail-open-periaatteella ja vain _alentaa prioriteettia_ rajansa saavuttaneelta yhteydeltä — yhden
+> yhteyden joukossa se ei voi asettaa kovaa rajaa, joten juuri tämä semafori todella
+> hillitsee pyyntötulvaa.
+
+### Jäähdytysjakson huomioiva yhdistelmän uudelleenyritys
+
+Kun ominaisuus on käytössä, pyyntö, joka minkä tahansa yhdistelmästrategian yhteydessä johtaisi lyhyestä tilapäisestä jäähdytysjaksosta aiheutuvaan lopulliseen 429-virheeseen, odottaa jakson päättymistä ja välitetään uudelleen 429-virheen palauttamisen sijaan — tämä kattaa Gemini-tyyppiset TPM-/RPM-aikaikkunat (noin 60 sekunnin retry-after) usean mallin yhdistelmissä, esimerkiksi kun kahden mallin yhdistelmän molemmat kohteet saavuttavat mallikohtaisen pyyntönopeusrajan. Toimintaa rajoittavat `comboCooldownWait`-asetukset (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) kohdassa **Asetukset → Häiriönsieto**. Se ei koskaan odota syyn ollessa `quota_exhausted` (lukittu keskiyöhön asti) tai todennukseen / puuttuvaan resurssiin liittyvä.
 
 ---
 

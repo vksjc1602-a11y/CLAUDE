@@ -212,133 +212,210 @@ Tegishli mexanizmlar alohida bo‘lib qoladi:
 
 ---
 
-## 3. Modelni bloklash
+## 3. Model bloklanishi
 
 **Qamrov:** provayder + ulanish + model uchligi.
 
-**Holat bo‘yicha kalit qamrovi:** xato holati bloklash qaysi kalitga
-yozilishini belgilaydi (`open-sse/services/accountFallback/exactModelLock.ts` ichidagi `resolveLockoutScope()`):
+**Holat bo‘yicha kalit qamrovi:** bloklanish qaysi kalitga yozilishini xatolik holati belgilaydi
+(`open-sse/services/accountFallback/exactModelLock.ts` ichidagi `resolveLockoutScope()`):
 
-- `429` / `403` / `402` — kvota yoki foydalanish huquqi signali — **kvota oilasini** bloklaydi:
-  codex uchun butun `codex` / `spark` qamrovi (ulanishdagi barcha `gpt-5*`
-  modellari), boshqa provayderlar uchun `getQuotaScopedModelForProvider()`.
+- `429` / `403` / `402` — kvota yoki foydalanish huquqi signali — **kvota oilasi**ni bloklaydi:
+  codex uchun butun `codex` / `spark` qamrovi (ulanishdagi har bir `gpt-5*`
+  modeli), boshqa provayderlar uchun `getQuotaScopedModelForProvider()`.
 - `404` faqat modelning o‘zini bloklaydi (`getModelLockKey()` `not_found` qamrovini toraytiradi).
-- Boshqa har qanday holat — `5xx` transport/server xatolari va sifat tekshiruvi
-  natijasida OmniRoute tomonidan yaratilgan `502` — faqat **aniq**
+- Boshqa har qanday holat — `5xx` transport/server xatoliklari va sifat tekshiruvi
+  natijasida OmniRoute tomonidan sintez qilingan `502` — faqat **aniq**
   provayder/ulanish/model uchligini bloklaydi. Bitta modeldagi nosoz oqim akkaunt
-  kvotasi haqida dalil emas; bu qoidadan oldin `codex/gpt-5.6-luna` modelidagi
-  bitta bo‘sh javob ushbu ulanishning barcha `gpt-5*` modellarini, kvotasi
-  o‘zgarmagan bo‘lsa ham, marshrutlashdan 2–30 daqiqaga (bosqichma-bosqich oshib boruvchi) chiqarib tashlardi.
-- Chaqiruvchining aniq ko‘rsatilgan `scope` opsiyasi doimo ustun turadi (Antigravity `"exact"` uzatadi).
+  kvotasi haqida dalil emas; ushbu qoidadan oldin `codex/gpt-5.6-luna` dagi
+  bitta bo‘sh javob, kvotaga ta’sir qilmagan holda, o‘sha ulanishdagi barcha
+  `gpt-5*` modellarini marshrutlashdan 2–30 daqiqaga (bosqichma-bosqich oshib boruvchi)
+  chiqarib tashlardi.
+- Chaqiruvchining aniq ko‘rsatilgan `scope` opsiyasi har doim ustun turadi (Antigravity `"exact"` uzatadi).
 
-**Maqsad:** faqat bitta model mavjud bo‘lmaganda yoki kvotasi cheklanganda butun ulanishni o‘chirib qo‘yishning oldini olish.
+**Maqsad:** faqat bitta model mavjud bo‘lmaganda yoki kvotasi cheklanganda butun ulanishni o‘chirib qo‘ymaslik.
 
 **Misollar:**
 
-- Har bir model uchun alohida kvotaga ega provayderlarning 429 qaytarishi
-- Mahalliy provayderlarning mavjud bo‘lmagan bitta model uchun 404 qaytarishi
-- Provayderga xos rejim/model ruxsati xatolari (masalan, Grok rejimlari)
+- 429 qaytaradigan har bir model uchun alohida kvotaga ega provayderlar
+- Bitta mavjud bo‘lmagan model uchun 404 qaytaradigan lokal provayderlar
+- Provayderga xos rejim/model ruxsati xatoliklari (masalan, Grok rejimlari)
 
 **Amalga oshirish:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Model kutish muddatlari boshqaruv paneli (v3.8.0)
+### Model kutish davrlari boshqaruv paneli (v3.8.0)
 
-UI: Sozlamalar → Model kutish muddatlari (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+UI: Sozlamalar → Model kutish davrlari (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Faol bloklashlarni quyidagi ma’lumotlar bilan ko‘rsatadi: provayder, ulanish, model, sabab, expiresAt. Operatorlar kartadan modelni qo‘lda qayta yoqishi mumkin.
+Faol bloklanishlarni quyidagilar bilan ro‘yxatlaydi: provayder, ulanish, model, sabab, expiresAt. Operatorlar kartadan modelni qo‘lda qayta yoqishlari mumkin.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — faol bloklashlar ro‘yxatini olish
-- `DELETE /api/resilience/model-cooldowns` — qo‘lda qayta yoqish. So‘rov tanasi: `{provider, connection, model}`. Autentifikatsiya: boshqaruv.
+- `GET /api/resilience/model-cooldowns` — faol bloklanishlarni ro‘yxatlash
+- `DELETE /api/resilience/model-cooldowns` — qo‘lda qayta yoqish. Tana: `{provider, connection, model}`. Autentifikatsiya: boshqaruv.
 
-### Bloklash sozlamalari UI’i + muvaffaqiyat asosidagi pasayish orqali tiklash (v3.8.23)
+### Kutish davri menejeri
 
-Modelni bloklash doimo yoqilgan, kodda qat’iy belgilangan xatti-harakatdan o‘z
-sozlamalar kartasi va o‘zini o‘zi tiklash yo‘liga ega, to‘liq sozlanadigan hamda
-ixtiyoriy yoqiladigan funksiyaga aylantirildi.
+UI: Monitoring → Kutish davri menejeri (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Sozlamalar kartasi:** Sozlamalar → Modelni bloklash
+Har bir provayder sahifasini alohida ochish o‘rniga, vaqtinchalik sabab tufayli
+marshrutlashdan chiqarilgan barcha ulanishlar uchun bitta sahifa. U ulanishlarning
+kutish davrlarini, model bloklanishlarini va terminal holatlarni ro‘yxatlaydi;
+ularni har bir ulanish, tanlangan ulanishlar yoki provayderning barcha ulanishlari
+uchun tozalaydi hamda eng ko‘p sozlanadigan kutish davri qoidalarini tahrirlaydi:
+`streamStallCooldown.enabled` va OAuth / API-kalit `connectionCooldown` asosiy
+kutish davri hamda maksimal ortga chekinish bosqichlari (`PATCH /api/resilience`
+orqali saqlanadi). Terminal holatlar (`banned`, `expired`, `credits_exhausted`)
+ro‘yxatga olinadi, ammo bu yerda hech qachon tozalanmaydi.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autentifikatsiya: boshqaruv):
+
+- `GET /api/resilience/cooldowns[?provider=]` — holati, qolgan kutish davri,
+  ortga chekinish darajasi, oxirgi xatolik turi va model bloklanishlari bilan ulanishlar (hisob ma’lumotlarisiz)
+- `POST /api/resilience/cooldowns` — tana `{connectionIds: string[]}` yoki
+  `{all: true, provider?}`; `{cleared, unchanged, skippedTerminal, lockoutsCleared}` qaytaradi
+
+### Bloklanish sozlamalari UI’i + muvaffaqiyat orqali pasaytirib tiklash (v3.8.23)
+
+Model bloklanishi doimo yoqilgan, kodga qattiq yozilgan xatti-harakatdan o‘zining
+sozlamalar kartasi va o‘zini-o‘zi tiklash yo‘liga ega, to‘liq sozlanadigan hamda
+ixtiyoriy yoqiladigan funksiyaga aylandi.
+
+**Sozlamalar kartasi:** Sozlamalar → Model bloklanishi
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
 Bu yuqoridagi faqat o‘qish uchun mo‘ljallangan `ModelCooldownsCard`dan (u faqat
-faol bloklashlarni _ro‘yxatlaydi_) **farq qiladi** — yangi karta _parametrlarni sozlaydi_. Standart
-qiymatlar `DEFAULT_MODEL_LOCKOUT_SETTINGS` ichida joylashgan
-(`src/lib/resilience/modelLockoutSettings.ts`):
+faol bloklanishlarni _ro‘yxatlaydi_) **farq qiladi** — yangi karta _parametrlarni sozlaydi_. Standart qiymatlar
+`DEFAULT_MODEL_LOCKOUT_SETTINGS`
+(`src/lib/resilience/modelLockoutSettings.ts`) ichida joylashgan:
 
-| Sozlama                 | Standart qiymat                  | Ma’nosi                                                                    |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Asosiy almashtirgich — modelni bloklash **standart holatda o‘chiq**.       |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model qamrovidagi xato sifatida hisoblanadigan yuqori oqim holatlari.      |
-| `baseCooldownMs`        | `120_000` (120 s)                | Birinchi xato uchun dastlabki bloklash davomiyligi.                        |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Bosqichma-bosqich oshiriladigan kutish muddatining yuqori chegarasi.       |
-| `maxBackoffSteps`       | `10`                             | Eksponensial kechikishni oshirish bosqichlarining maksimal soni.           |
-| `useExponentialBackoff` | `true`                           | Takroriy xatolar kutish muddatini eksponensial ravishda oshirishi kerakmi. |
+| Sozlama                 | Standart qiymat                  | Ma’nosi                                                                         |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Asosiy almashtirgich — model bloklanishi **standart holatda o‘chiq**.           |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model qamrovidagi xatolik sifatida hisoblanadigan yuqori oqim holatlari.        |
+| `baseCooldownMs`        | `120_000` (120 s)                | Birinchi xatolik uchun boshlang‘ich bloklanish davomiyligi.                     |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Bosqichma-bosqich oshiriladigan kutish davrining yuqori chegarasi.              |
+| `maxBackoffSteps`       | `10`                             | Eksponensial ortga chekinishni oshirish bosqichlarining maksimal soni.          |
+| `useExponentialBackoff` | `true`                           | Takroriy xatoliklar kutish davrini eksponensial ravishda oshirish-oshirmasligi. |
 
-Sozlamalar odatiy sozlamalar ombori orqali saqlanadi va chidamlilik sozlamalari
+Sozlamalar odatiy sozlamalar ombori orqali saqlanadi va barqarorlik sozlamalari
 sxemasi orqali tekshiriladi; karta `baseCooldownMs`/`maxCooldownMs`
-qiymatlarini (`maxCooldownMs ≥ baseCooldownMs` sharti bilan) hamda `maxBackoffSteps`ni cheklaydi.
+(`maxCooldownMs ≥ baseCooldownMs` sharti bilan) va `maxBackoffSteps` qiymatlarini
+ruxsat etilgan chegaralarga keltiradi.
 
-**Muvaffaqiyat asosidagi pasayish orqali tiklash:** tiklash faqat taymer muddati
-tugashiga bog‘liq **emas**. Sog‘lom javob modelning xatolar sonini bosqichma-bosqich
-kamaytiradi, shuning uchun vaqt oralig‘i davomida tiklangan model taymer muddati
-tugashidan oldin oshib borishni to‘xtatadi (va bloklash bekor qilinadi). Kombinatsiyalangan
-nishon muvaffaqiyatli bo‘lganda, `open-sse/services/combo.ts` fayli
-`decayModelFailureCount()`ni (`open-sse/services/accountFallback.ts`) chaqiradi,
-u saqlangan `failureCount` qiymatini **yarmiga kamaytiradi**
-(`Math.floor(failureCount / 2)`); qiymat `0`ga yetganda bloklash yozuvi butunlay
-o‘chiriladi. Unga mos `recordModelLockoutFailure()` eskalatsiya oralig‘ida yuz
-bergan xatolarda hisoblagichni oshiradi (va kutish muddatini uzaytiradi).
-Muvaffaqiyat asosidagi bu pasayish oddiy taymer muddati tugashiga qo‘shimcha
-ravishda ishlaydi — har ikkala yo‘l ham modelni qayta yoqishi mumkin.
+**Muvaffaqiyat orqali pasaytirib tiklash:** tiklanish **faqat** taymer muddati
+tugashiga bog‘liq emas. Sog‘lom javob modelning xatoliklar sonini bosqichma-bosqich
+kamaytiradi, natijada davr o‘rtasida tiklangan model taymer muddati tugashidan
+oldin oshishni to‘xtatadi (va bloklanishdan chiqariladi). Muvaffaqiyatli kombinatsiya
+nishonida `open-sse/services/combo.ts` ichidan `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`) chaqiriladi, u saqlangan
+`failureCount` qiymatini **yarmiga kamaytiradi** (`Math.floor(failureCount / 2)`);
+qiymat `0` ga yetganda bloklanish yozuvi butunlay o‘chiriladi. Unga mos
+`recordModelLockoutFailure()` eskalatsiya oynasidagi xatoliklarda hisoblagichni
+oshiradi (va kutish davrini uzaytiradi). Muvaffaqiyat orqali pasaytirish oddiy
+taymer muddati tugashiga qo‘shimcha ravishda ishlaydi — har ikkala yo‘l ham modelni qayta yoqishi mumkin.
 
-**Holat:** bloklashlar DB’da saqlanmaydi, balki **xotirada** saqlanadi (har bir
-jarayon uchun `provider:connectionId:model` kalitli `ModelLockoutEntry`
-`Map`lari, aniq qamrovli bloklashlar uchun esa `provider:connectionId:exact:model`);
-ular qayta ishga tushirilganda yo‘qoladi. _Sozlamalar_ doimiy saqlanadi; faol
-bloklash _holati_ esa vaqtinchalikdir.
+**Holat:** bloklanishlar DB’da saqlanmaydi, balki **xotirada** (`provider:connectionId:model`
+bo‘yicha kalitlangan har bir jarayonga tegishli `ModelLockoutEntry` `Map`lari,
+aniq qamrovli bloklanishlar esa `provider:connectionId:exact:model` bo‘yicha)
+saqlanadi — qayta ishga tushirishda ular yo‘qoladi. _Sozlamalar_ doimiy saqlanadi;
+faol bloklanish _holati_ esa vaqtinchalik.
 
 ---
 
-## 4. Kvota ulashishdagi parallellikni boshqarish (v3.8.36)
+## 4. Quota-Share parallellik boshqaruvi (v3.8.36)
 
 Obuna hisoblari (GLM, MiniMax va boshqalar) ko‘pincha bir vaqtning o‘zida faqat ~1–3 ta
-so‘rovni qabul qiladi; bu chegaradan oshish 429 xatolari va kutish davrlarini keltirib chiqaradi. Bu holat
+so‘rovni qabul qiladi; bundan oshib ketish 429 xatolari va kutish davrlarini keltirib chiqaradi. Bu
 bir nechta API kaliti bitta yuqori oqimdagi hisobni ulashadigan **quota-share** (`qtSd/…`)
-kombinatsiyalarida ayniqsa keskin. Uchta qatlam umumiy hisobning so‘rovlar bilan to‘lib ketishiga yo‘l qo‘ymaydi.
+kombinatsiyalarida ayniqsa keskin namoyon bo‘ladi. Uchta qatlam umumiy hisobning so‘rovlar bilan
+haddan tashqari yuklanishiga yo‘l qo‘ymaydi.
 
 ### Har bir ulanish uchun parallellik chegarasi (`max_concurrent`)
 
-Har bir provayder ulanishi `max_concurrent` yuqori chegarasini belgilashi mumkin
+Har bir provayder ulanishi `max_concurrent` yuqori chegarasini e’lon qilishi mumkin
 (`provider_connections.max_concurrent`, ulanish modal oynasi / API / DB orqali o‘rnatiladi).
 Cheklov bo‘lmasligi uchun uni bo‘sh qoldiring. Bu quyidagi ketma-ketlashtirish
-qatlamini boshqaradigan yagona sozlama — uni hisobning haqiqiy parallellik darajasiga o‘rnating (masalan, GLM ~1, MiniMax ~2).
+qatlamini boshqaradigan yagona sozlama — uni hisobning haqiqiy parallelligiga
+o‘rnating (masalan, GLM ~1, MiniMax ~2).
+
+### Har bir model uchun parallellik chegaralari (`modelConcurrency`)
+
+Ulanish o‘zining `rateLimitOverrides` xaritasi ichida har bir model uchun aniq
+parallellik chegaralarini qo‘shimcha ravishda e’lon qilishi mumkin:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Uni ulanish modal oynasida (**Rate limit overrides → Per-model
+concurrency caps**, har bir qatorda bittadan `model=cap`) yoki ayni JSON
+tuzilmasi bilan `PATCH /api/providers/[id]` orqali o‘rnating. Kalit semantikasi:
+
+- **Butun ulanish bo‘yicha va muayyan model uchun:** `maxConcurrent` butun
+  ulanish uchun umumiy yuqori chegara bo‘lib qoladi. Ikkalasi ham qo‘llanilganda,
+  ikkala shlyuz bir xil kompozit shlyuzda atomar tarzda egallanadi
+  (`global → provider → account → model`); amaldagi xatti-harakatni
+  qo‘llaniladigan qat’iyroq chegara belgilaydi.
+- **Model kalitining aniq mosligi:** kalit — marshrutlash aniqlanganidan keyin
+  ijro mexanizmiga uzatiladigan model satri; odatda bu mijoz tomonidagi
+  `provider/model` taxallusi emas, balki yuqori oqim modelining oddiy identifikatoridir
+  (`glm-5`); `zai/glm-5` esa `glm-5` bilan mos kelmaydi. Qiymatlar bir vaqtda
+  bajariladigan so‘rovlar uchun musbat butun sonli yuqori chegaralardir.
+- **Mahalliy navbatga qo‘yish, aniqlashsiz:** ortiqcha so‘rovlar mavjud
+  navbat/vaqt tugashi semantikasiga muvofiq mahalliy navbatga qo‘yiladi
+  (turlashtirilgan `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL` qabul qilish
+  xatolari). OmniRoute yuqori oqim siyosatini aniqlamaydi yoki xulosa qilib
+  chiqarmaydi — u operator sozlagan aniq chegaralarni qo‘llaydi. To‘yingan model
+  shlyuzi provayderni hech qachon o‘chirib qo‘ymaydi va modelning doimiy
+  bloklanishiga olib kelmaydi; yuqori oqimdagi 429/kutish davri/zaxira variantiga
+  o‘tish xatti-harakati xatolarga qarshi so‘nggi himoya bo‘lib qoladi.
+- **Har bir ulanish va har bir jarayon doirasi:** chegaralar ma’lumotlar
+  bazasidagi har bir ulanish uchun alohida bo‘lib, xotirada saqlanadi, shuning
+  uchun ayni yuqori oqim API kalitidan qayta foydalanadigan ikkita ulanish
+  o‘zaro muvofiqlashtirilmaydi.
+- **Sozlanmagan bo‘lsa, o‘zgarishsiz qoladi:** xaritani ko‘rsatmaslik (yoki
+  boshqaruv panelidagi maydonni bo‘sh qoldirish) hech qanday model shlyuzini
+  qo‘shmaydi. Hech qanday universal provayder chegarasini da’vo qilmaydigan
+  namuna konfiguratsiya:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Quota-share so‘rovlarini ketma-ketlashtirish
 
-Quota-share dispetcherizatsiyasi musbat `max_concurrent` qiymatini belgilagan ulanishni
-nishonga olganida, ayni **hisobga** yo‘naltirilgan parallel so‘rovlar har bir ulanishga
-tegishli semafor (`qsconn:<connectionId>` kaliti) orqali ketma-ketlashtiriladi: ortiqcha so‘rovlar
-hisobni to‘ldirish o‘rniga **navbatda kutadi**. Bu **fail-open** tamoyilida ishlaydi — to‘lgan
-navbat yoki taym-aut jo‘natilishi mumkin bo‘lgan so‘rovni rad etish o‘rniga slotsiz davom etadi.
-Buni **Settings → Resilience → Quota-share per-connection
-concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standart
-holatda yoqilgan) orqali almashtiring. `max_concurrent` chegarasi bo‘lmasa, xatti-harakat o‘zgarmaydi.
+Quota-share jo‘natmasi musbat `max_concurrent` qiymatini e’lon qilgan ulanishni
+nishonga olganda, ushbu **hisob** uchun parallel so‘rovlar har bir ulanish
+semafori (`qsconn:<connectionId>` kaliti) orqali ketma-ketlashtiriladi: ortiqcha
+so‘rovlar hisobni haddan tashqari yuklash o‘rniga **navbatda kutadi**. U
+**fail-open** tamoyilida ishlaydi — to‘yingan navbat yoki vaqt tugashi jo‘natilishi
+mumkin bo‘lgan so‘rovni rad etish o‘rniga slotsiz davom etadi. Uni
+**Settings → Resilience → Quota-share per-connection concurrency**
+(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standart bo‘yicha
+yoqilgan) bo‘limida almashtiring. `max_concurrent` chegarasisiz xatti-harakat
+o‘zgarmaydi.
 
-> Quota-share marshrutlash darvozasi (`selectQuotaShareTarget`, DRR + P2C)ning o‘zi
-> fail-open tamoyilida ishlaydi va faqat chegaraga yetgan ulanishning ustuvorligini _pasaytiradi_ —
-> bitta ulanishli pulda u qat’iy cheklov qo‘ya olmaydi, shu sababli oqimni amalda aynan
-> shu semafor nazorat qiladi.
+> Quota-share marshrutlash shlyuzining (`selectQuotaShareTarget`, DRR + P2C) o‘zi
+> fail-open tamoyilida ishlaydi va faqat _chegaraga yetgan_ ulanishning ustuvorligini
+> pasaytiradi — bitta ulanishli pulda u qat’iy cheklov o‘rnata olmaydi, shu sababli
+> oqimni amalda aynan shu semafor cheklaydi.
 
-### Kombinatsiyaning kutish davrini hisobga oluvchi qayta urinish
+### Kutish davrini hisobga oluvchi combo qayta urinishi
 
-Har bir kombinatsiya strategiyasi uchun (yoqilganida), qisqa muddatli o‘tkinchi kutish davri sababli
-429 xatosini aniq yuzaga keltiradigan so‘rov 429 ni qaytarish o‘rniga shu davr tugashini kutadi va
-qayta jo‘natiladi — bu ko‘p modelli kombinatsiyalardagi Gemini turidagi TPM/RPM oynalarini
-(~60s retry-after), masalan, 2 modelli kombinatsiyaning har ikkala nishoni har bir modelga tegishli
-tezlik chegarasiga urilishini qamrab oladi. Bu **Settings → Resilience** ichidagi
-`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) bilan cheklanadi. U `quota_exhausted` (yarim tungacha bloklangan)
-yoki autentifikatsiya/topilmadi sabablarida hech qachon kutmaydi.
+Har bir combo strategiyasi uchun (yoqilganda), QISQA vaqtinchalik kutish davri
+tufayli 429 xatosini qat’iylashtirishi mumkin bo‘lgan so‘rov 429 ni qaytarish
+o‘rniga uning tugashini kutadi va qayta jo‘natiladi — bu bir nechta modelli
+combo’larda Gemini turidagi TPM/RPM oynalarini (~60s retry-after) qamrab oladi,
+masalan, 2 modelli combo’ning ikkala nishoni ham har bir model uchun tezlik
+chegarasiga duch kelganda. **Settings → Resilience** bo‘limidagi
+`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) bilan
+cheklanadi. U `quota_exhausted` (yarim tungacha bloklangan) yoki autentifikatsiya/topilmadi
+sabablarida hech qachon kutmaydi.
 
 ---
 

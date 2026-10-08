@@ -207,27 +207,27 @@ OmniRoute 具有三种彼此独立但又相互关联的弹性机制。每种机�
 
 **范围：** 提供者 + 连接 + 模型三元组。
 
-**按状态码确定键范围：** 失败状态码决定锁定写入哪个键
+**按状态划分的键范围：** 失败状态决定锁定写入哪个键
 （`open-sse/services/accountFallback/exactModelLock.ts` 中的 `resolveLockoutScope()`）：
 
 - `429` / `403` / `402` — 配额或授权信号 — 锁定**配额系列**：
   对于 codex，锁定整个 `codex` / `spark` 范围（该连接的所有 `gpt-5*` 模型）；
   对于其他提供者，则使用 `getQuotaScopedModelForProvider()`。
-- `404` 锁定单个模型（`getModelLockKey()` 会缩小 `not_found` 的范围）。
-- 任何其他状态码 — `5xx` 传输/服务器故障，以及 OmniRoute 因质量验证而自行
-  合成的 `502` — 仅锁定**精确的**提供者/连接/模型三元组。某个模型上的异常流
-  并不能说明该账户的配额存在问题；在此规则实施之前，
-  `codex/gpt-5.6-luna` 的一次空响应会将该连接的所有 `gpt-5*` 模型从路由中
-  移除 2–30 分钟（逐步延长），即使其配额并未受到影响。
+- `404` 锁定基础模型（`getModelLockKey()` 会缩小 `not_found` 的范围）。
+- 任何其他状态 — `5xx` 传输/服务器故障，以及 OmniRoute 自身因质量验证而合成的
+  `502` — 仅锁定**精确的**提供者/连接/模型三元组。某个模型上的异常流不能证明
+  账户配额存在问题；在应用此规则之前，`codex/gpt-5.6-luna` 上的一次空响应
+  会将该连接的每个 `gpt-5*` 模型从路由中移除 2–30 分钟（逐步升级），
+  即使其配额完全未受影响。
 - 调用方显式指定的 `scope` 选项始终优先（Antigravity 会传入 `"exact"`）。
 
-**目的：** 避免仅因某个模型不可用或受到配额限制，就禁用整个连接。
+**目的：** 避免仅因某一个模型不可用或受配额限制，就禁用整个连接。
 
 **示例：**
 
-- 按模型分配配额的提供者返回 429
-- 本地提供者因缺少某个模型而返回 404
-- 特定于提供者的模式/模型权限故障（例如 Grok 模式）
+- 按模型计配额的提供者返回 429
+- 本地提供者因某个模型缺失而返回 404
+- 提供者特定的模式/模型权限失败（例如 Grok 模式）
 
 **实现：** `open-sse/services/accountFallback.ts` — `lockModel()`、`clearModelLock()`、`getAllModelLockouts()`。
 
@@ -235,16 +235,34 @@ OmniRoute 具有三种彼此独立但又相互关联的弹性机制。每种机�
 
 UI：设置 → 模型冷却（`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`）
 
-列出活动锁定及以下信息：提供者、连接、模型、原因、过期时间。操作员可以从该卡片中手动重新启用模型。
+列出活动锁定及以下信息：提供者、连接、模型、原因、expiresAt。运维人员可以从该卡片手动重新启用模型。
 
 **REST API：**
 
 - `GET /api/resilience/model-cooldowns` — 列出活动锁定
 - `DELETE /api/resilience/model-cooldowns` — 手动重新启用。请求体：`{provider, connection, model}`。身份验证：管理权限。
 
+### 冷却管理器
+
+UI：监控 → 冷却管理器（`src/app/(dashboard)/dashboard/resilience/cooldowns/`）。
+
+在一个页面中显示因临时原因而退出路由的所有连接，无需逐一打开每个提供者页面。
+该页面会列出连接冷却、模型锁定和终止状态，并支持按连接、按所选项或按某个提供者的
+所有连接进行清除；还可编辑最常调优的冷却规则：`streamStallCooldown.enabled`，
+以及 OAuth / API 密钥的 `connectionCooldown` 基础冷却时间和最大退避步数（通过
+`PATCH /api/resilience` 保存）。终止状态（`banned`、`expired`、`credits_exhausted`）
+会列出，但绝不会在此处清除。
+
+**REST API**（`src/lib/resilience/cooldownManager.ts`，身份验证：管理权限）：
+
+- `GET /api/resilience/cooldowns[?provider=]` — 返回包含状态、剩余冷却时间、
+  退避级别、最后错误类型和模型锁定的连接（不含凭据）
+- `POST /api/resilience/cooldowns` — 请求体为 `{connectionIds: string[]}` 或
+  `{all: true, provider?}`；返回 `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
 ### 锁定设置 UI + 成功衰减恢复 (v3.8.23)
 
-模型锁定从始终启用的硬编码行为，转变为完全可配置的可选功能，
+模型锁定从始终启用的硬编码行为，转变为完全可配置的选择启用功能，
 并拥有独立的设置卡片和自愈恢复路径。
 
 **设置卡片：** 设置 → 模型锁定
@@ -254,60 +272,78 @@ _列出_活动锁定）— 新卡片用于_配置参数_。默认值位于
 `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 （`src/lib/resilience/modelLockoutSettings.ts`）中：
 
-| 设置                    | 默认值                           | 含义                                 |
-| ----------------------- | -------------------------------- | ------------------------------------ |
-| `enabled`               | `false`                          | 总开关 — 模型锁定**默认关闭**。      |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 计为模型范围故障的上游状态码。       |
-| `baseCooldownMs`        | `120_000`（120 秒）              | 首次故障的初始锁定时长。             |
-| `maxCooldownMs`         | `1_800_000`（30 分钟）           | 逐步延长后的冷却时间上限。           |
-| `maxBackoffSteps`       | `10`                             | 指数退避逐步延长的最大步数。         |
-| `useExponentialBackoff` | `true`                           | 重复故障是否以指数方式延长冷却时间。 |
+| 设置                    | 默认值                           | 含义                                   |
+| ----------------------- | -------------------------------- | -------------------------------------- |
+| `enabled`               | `false`                          | 主开关 — 模型锁定**默认关闭**。        |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 计为模型范围故障的上游状态。           |
+| `baseCooldownMs`        | `120_000` (120 秒)               | 首次失败的初始锁定时长。               |
+| `maxCooldownMs`         | `1_800_000` (30 分钟)            | 逐步升级后的冷却时间上限。             |
+| `maxBackoffSteps`       | `10`                             | 指数退避升级的最大步数。               |
+| `useExponentialBackoff` | `true`                           | 重复失败时是否以指数方式延长冷却时间。 |
 
-设置通过常规设置存储持久化，并使用弹性设置架构进行验证；该卡片会限制
-`baseCooldownMs`/`maxCooldownMs`
-（要求 `maxCooldownMs ≥ baseCooldownMs`）和 `maxBackoffSteps`。
+设置通过常规设置存储持久化，并通过弹性设置架构进行验证；该卡片会限制
+`baseCooldownMs`/`maxCooldownMs`（其中 `maxCooldownMs ≥ baseCooldownMs`）
+以及 `maxBackoffSteps` 的取值。
 
-**成功衰减恢复：** 恢复**并非**完全依赖计时器到期。健康响应会逐步降低模型的
-失败计数，因此在窗口期内恢复的模型会停止逐步延长锁定（并解除锁定），而无须
-等待计时器到期。当组合目标成功时，`open-sse/services/combo.ts` 会调用
-`decayModelFailureCount()`
+**成功衰减恢复：** 恢复**并非**仅依赖计时器到期。健康响应会逐步降低模型的失败计数，
+因此在时间窗口中途恢复的模型会停止升级，并在计时器到期前解除锁定。组合目标成功时，
+`open-sse/services/combo.ts` 会调用 `decayModelFailureCount()`
 （`open-sse/services/accountFallback.ts`），将存储的
 `failureCount` **减半**（`Math.floor(failureCount / 2)`）；当其达到 `0` 时，
-锁定条目将被完全删除。与之对应的 `recordModelLockoutFailure()`
-会在逐步延长窗口内发生故障时增加计数（并延长冷却时间）。此成功衰减机制是对
-普通计时器到期机制的补充 — 任一路径都可以重新启用模型。
+锁定条目会被完全删除。对应的 `recordModelLockoutFailure()` 会在升级窗口内发生失败时
+递增计数（并延长冷却时间）。这种成功衰减机制是普通计时器到期机制的补充 —
+任一路径均可重新启用模型。
 
-**状态：** 锁定保存在**内存中**（每个进程中都有以
-`provider:connectionId:model` 为键的 `ModelLockoutEntry` `Map`，
-精确范围锁定则以 `provider:connectionId:exact:model` 为键），不会持久化到
-数据库 — 重启后会丢失。_设置_会被持久化；活动锁定的_状态_是临时的。
+**状态：** 锁定保存在**内存中**（每个进程的 `Map`，其中 `ModelLockoutEntry`
+以 `provider:connectionId:model` 为键，精确范围锁定则以
+`provider:connectionId:exact:model` 为键），不会持久化到
+数据库 — 重启后会丢失。_设置_会持久化；活动锁定的_状态_是临时的。
 
 ---
 
 ## 4. 配额共享并发控制 (v3.8.36)
 
-订阅账户（GLM、MiniMax 等）通常只能接受约 1–3 个并发请求；超过此限制会触发 429 和冷却。在 **quota-share**（`qtSd/…`）组合下，这一问题尤其突出，因为多个 API 密钥共享同一个上游账户。通过三层机制防止共享账户被请求淹没。
+订阅账户（GLM、MiniMax 等）通常仅允许约 1–3 个并发请求；超过此限制会触发 429 和冷却。这一问题在多个 API 密钥共享同一上游账户的 **配额共享**（`qtSd/…`）组合中尤为突出。系统通过三层机制防止共享账户被请求淹没。
 
 ### 每连接并发上限（`max_concurrent`）
 
-每个提供者连接都可以声明一个 `max_concurrent` 上限
-（`provider_connections.max_concurrent`，可在连接弹窗 / API / DB 中设置）。
-留空表示不设限制。这是驱动下述串行化层的唯一配置项——请将其设置为账户的实际并发数（例如 GLM 约为 1，MiniMax 约为 2）。
+每个提供者连接都可以声明一个 `max_concurrent` 上限（`provider_connections.max_concurrent`，可在连接弹窗 / API / DB 中设置）。留空表示不限制。这是驱动下述串行化层的唯一配置项——请将其设置为账户的实际并发能力（例如 GLM 约为 1，MiniMax 约为 2）。
+
+### 每模型并发上限（`modelConcurrency`）
+
+连接还可以在其 `rateLimitOverrides` 映射中声明精确的每模型并发上限：
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+可在连接弹窗中设置（**速率限制覆盖 → 每模型并发上限**，每行一个 `model=cap`），也可以通过 `PATCH /api/providers/[id]` 使用相同的 JSON 结构进行设置。关键语义如下：
+
+- **连接级与模型级：** `maxConcurrent` 仍是共享的连接级上限。当两者同时适用时，两个门控会在同一个组合门控中以原子方式获取（`全局 → 提供者 → 账户 → 模型`）；实际行为以更严格的适用限制为准。
+- **精确匹配模型键：** 键是完成路由解析后传递给执行器的模型字符串——通常是纯上游模型 ID（`glm-5`），而不是客户端侧的 `provider/model` 别名（`zai/glm-5` 与 `glm-5` 不匹配）。值必须是正整数形式的并发请求上限。
+- **本地排队，不进行探测：** 超额请求将按照现有队列/超时语义在本地排队（类型化的 `SEMAPHORE_TIMEOUT` / `SEMAPHORE_QUEUE_FULL` 准入错误）。OmniRoute 不会探测或推断上游策略，而是严格执行运维人员配置的上限。模型门控饱和绝不会禁用提供者，也不会造成永久性的模型锁定；上游 429、冷却和回退行为仍然是最终的错误保障机制。
+- **每连接、每进程作用域：** 上限按数据库连接分别应用并保存在内存中，因此，即使两个连接复用了相同的上游 API 密钥，它们也不会相互协调。
+- **未配置表示保持不变：** 省略该映射（或将仪表板字段留空）不会添加模型门控。以下示例配置并未断言任何通用的提供者限制：
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### 配额共享请求串行化
 
-当配额共享调度的目标连接声明了一个正数
-`max_concurrent` 时，发往该**账户**的并发请求将通过一个
-每连接信号量（键为 `qsconn:<connectionId>`）进行串行化：超出的请求会**在队列中等待**，而不是淹没账户。该机制采用**故障开放**策略——当队列已饱和或发生超时时，请求会在未取得槽位的情况下继续执行，而不会拒绝任何可调度的请求。可在**设置 → 弹性 → 配额共享每连接并发**
-（`resilienceSettings.quotaShareConcurrencyLimit.enabled`，默认开启）
-中切换。未设置 `max_concurrent` 上限时，行为保持不变。
+当配额共享调度的目标连接声明了正数的 `max_concurrent` 时，发往该**账户**的并发请求会通过一个按连接划分的信号量（键为 `qsconn:<connectionId>`）进行串行化：超额请求会**在队列中等待**，而不是淹没账户。该机制采用**故障开放**策略——队列饱和或等待超时时，请求会在未获取槽位的情况下继续执行，而不会拒绝任何可调度的请求。可在**设置 → 韧性 → 配额共享每连接并发**中切换此功能（`resilienceSettings.quotaShareConcurrencyLimit.enabled`，默认开启）。如果没有 `max_concurrent` 上限，则行为保持不变。
 
-> 配额共享路由门控（`selectQuotaShareTarget`、DRR + P2C）本身采用
-> 故障开放策略，仅会降低达到上限的连接的优先级——在只有单个连接的池中，它无法进行硬限制，因此真正抑制请求洪峰的是此信号量。
+> 配额共享路由门控（`selectQuotaShareTarget`，DRR + P2C）本身采用故障开放策略，并且只会对已达到上限的连接进行_降优先级_处理——当池中只有单个连接时，它无法实施硬性限制，因此真正控制请求洪峰的是此信号量。
 
-### 感知组合冷却的重试
+### 组合冷却感知重试
 
-对于每一种组合策略（启用时），如果某个请求将因短暂的瞬时冷却而明确返回 429，则会等待冷却结束并重新调度，而不是返回 429——这涵盖了多模型组合中的 Gemini 类 TPM/RPM 窗口（约 60 秒的 retry-after），例如双模型组合的两个目标都触及了各自的每模型速率限制。其限制由**设置 → 弹性**中的 `comboCooldownWait`（`enabled`、`maxWaitMs`、`maxAttempts`、`budgetMs`）控制。对于 `quota_exhausted`（锁定至午夜）或身份验证/未找到原因，它绝不会等待。
+对于每种组合策略（启用时），如果某个请求会因短暂的短期冷却而最终产生 429，系统会等待冷却结束并重新调度，而不是返回 429——这涵盖多模型组合中 Gemini 类 TPM/RPM 窗口（约 60 秒的 retry-after），例如双模型组合的两个目标都触及每模型速率限制的情况。此行为受**设置 → 韧性**中的 `comboCooldownWait`（`enabled`、`maxWaitMs`、`maxAttempts`、`budgetMs`）约束。对于 `quota_exhausted`（锁定至午夜）或身份验证/未找到原因，系统绝不会等待。
 
 ---
 

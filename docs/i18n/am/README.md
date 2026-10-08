@@ -6,14 +6,14 @@
 
 <div align="center">
 
-<img src="./docs/screenshots/MainOmniRoute.png" alt="OmniRoute ዳሽቦርድ" width="820"/>
+<img src="./docs/screenshots/MainOmniRoute.png" alt="የOmniRoute ዳሽቦርድ" width="820"/>
 
 <br/>
 <br/>
 
-# 🚀 OmniRoute — ነጻው የኤአይይ መግቢያ በር
+# 🚀 OmniRoute — ነፃው የAI መግቢያ በር
 
-<img src="./docs/diagrams/readme-hero.svg" width="100%" alt="OmniRoute — ኮድ መስራት አታቁም:: እያንዳንዱ የኤአይይ መሳሪያ → 358 አቅራቢዎች — 150+ ነጻ — በአንድ የመጨረሻ ነጥብ በኩል:: Claude Code, Codex, Cursor, Cline, Copilot & Antigravity ወደ ነጻ Claude / GPT / Gemini በራስ-ሰር ምትኬ:: RTK + Caveman የተደራረበ መጭመቂያ 15–95% ቶከኖችን ይቆጥባል (~89% በአማካይ) — ገደቦችን በጭራሽ አይመታም:: 358 የኤአይይ አቅራቢዎች · 150+ ነጻ ደረጃዎች · ~1.62B ነጻ ቶከኖች/በወር · 19 የማዞሪያ ስልቶች · ለመጀመር $0::"/>
+<img src="./docs/diagrams/readme-hero.svg" width="100%" alt="OmniRoute — ኮድ መጻፍዎን ፈጽሞ አያቁሙ። እያንዳንዱ የAI መሣሪያ → 367 አቅራቢዎች — 150+ ነፃ — በአንድ endpoint በኩል። Claude Code፣ Codex፣ Cursor፣ Cline፣ Copilot እና Antigravity ከነፃ Claude / GPT / Gemini ጋር በራስ-ሰር fallback። RTK + Caveman የተደራረበ ማመቂያ 15–95% tokens (~89% በአማካይ) ይቆጥባል — ገደቦችን ፈጽሞ አይድረሱ። 367 የAI አቅራቢዎች · 150+ ነፃ tiers · ~1.62B ነፃ tokens/mo · 19 የማዘዋወሪያ ስልቶች · ለመጀመር $0።"/>
 
 </div>
 
@@ -214,47 +214,47 @@
 
 <div align="center">
 
-## 🆓 እንደጫኑት ወዲያውኑ ይሰራል — ምንም ቁልፎች የሉም፣ ምንም ቅንብር የለም
+## 🆓 እንደጫኑት ወዲያውኑ ይሰራል — ቁልፍ አያስፈልግም፣ ውቅር አያስፈልግም
 
 </div>
 
-<img src="./docs/diagrams/works-zero-config.svg" width="100%" alt="እንደጫኑት ወዲያውኑ ይሰራል — ምንም ቅንብር የለም። ሶስት ደረጃዎች: 1. ይጫኑ — npm i -g omniroute፣ ሰርቨሩ በ localhost:20128 ላይ ይጀምራል። 2. መሳሪያዎን ወደ http://localhost:20128/v1 ያመልክቱ — ማንኛውም ከ OpenAI ጋር ተኳሃኝ የሆነ መሳሪያ (Claude Code, Cursor, Cline)። 3. ይመልሳል — ፈጣን ምላሽ ለማግኘት auto ሞዴሉን ይጠቀሙ፣ ያለ API ቁልፍ፣ ያለ ምዝገባ፣ ያለ ቅንብር። ቁልፍ የሌለው አቅራቢ OpenCode Free በ auto ጥምር ውስጥ አስቀድሞ የተገጠመ ነው፣ ስለዚህ አዲስ ጭነት ወዲያውኑ ምላሽ ይሰጣል።"/>
+<img src="./docs/diagrams/works-zero-config.svg" width="100%" alt="እንደጫኑት ወዲያውኑ ይሰራል — ምንም ውቅር አያስፈልግም። ሦስት ደረጃዎች፦ 1. ይጫኑ — npm i -g omniroute፣ ሰርቨሩ localhost:20128 ላይ ይነሳል። 2. መሣሪያዎን ወደ http://localhost:20128/v1 ያመልክቱ — ማንኛውም ከOpenAI ጋር ተኳሃኝ የሆነ መሣሪያ (Claude Code፣ Cursor፣ Cline)። 3. ምላሽ ይሰጣል — የAPI ቁልፍ፣ ምዝገባ ወይም ውቅር ሳያስፈልግ ፈጣን ምላሽ ለማግኘት auto ሞዴልን ይጥሩ። ቁልፍ የማያስፈልገው አቅራቢ OpenCode Free አስቀድሞ በauto ጥምረት ውስጥ ተዋቅሯል፤ ስለዚህ አዲስ ጭነት ወዲያውኑ ምላሽ ይሰጣል።"/>
 
 ```bash
-# አዲስ ጭነት፣ ዜሮ ምስክርነቶች — auto አስቀድሞ ይሰራል።
+# አዲስ ጭነት፣ ምንም የመግቢያ ማረጋገጫ አያስፈልግም — `auto` አስቀድሞ ይሰራል፦
 curl http://localhost:20128/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-<sub>የተለየ ነፃ የኋላ-መጨረሻ ይመርጣሉ? `oc/…` (OpenCode Free)ን በቀጥታ ይደውሉ። ከዚያ ወደ `auto` ያሻሽሉ እና OmniRoute እንዲመርጥ ያድርጉ።</sub>
+<sub>የተወሰነ ነፃ የጀርባ አገልግሎት ይመርጣሉ? `oc/…` (OpenCode Free)ን በቀጥታ ይጥሩ። ከዚያ `auto`ን ይጠቀሙና OmniRoute እንዲመርጥ ያድርጉ።</sub>
 
-<sub>📦 ለ**Python, Node.js, PHP, እና cURL** ፈጣን ማስጀመሪያ ስክሪፕቶችን ይቅዱ-ይለጥፉ → [`examples/quickstart/`] (examples/quickstart/)</sub>
+<sub>📦 ለ**Python, Node.js, PHP, እና cURL** ቀድተው የሚለጥፏቸው ፈጣን መጀመሪያ ስክሪፕቶች → [`examples/quickstart/`](examples/quickstart/)</sub>
 
 <br/>
 
 <div align="center">
 
-# 💥 ቃል ኪዳኑ
+# 💥 ቃል የተገባው
 
 </div>
 
-<img src="./docs/diagrams/promise-pillars.svg" width="100%" alt="ቃል ኪዳኑ — አንድ የመጨረሻ ነጥብ እና 358 አቅራቢዎች። ሌላ ጤናማ ኢላማ እስካለ ድረስ አውቶማቲክ ምትኬ መስመሩን ይቀጥላል። ስድስት ምሰሶዎች: በ358 አቅራቢዎች ላይ ጠንካራ ምትኬ · ብቁ በሆኑ የስራ ጫናዎች ላይ እስከ 95% የቶከን ቁጠባ · ከ150+ ነፃ ደረጃዎች እና 54 ተደጋጋሚ/ቁልፍ የሌላቸው ለዘላለም ነፃ አቅራቢዎች ጋር ለመጀመር $0 · በአንድ ቅንብር በኩል 36 CLI/ወኪል ውህደቶች · OpenAI, Claude, Gemini እና Responses API ተኳሃኝነት በ /v1 · የምርት መቆጣጠሪያዎች እንደ ሰርክዩት ብሬከሮች፣ TLS ስቴልዝ፣ MCP 110 መሳሪያዎች፣ A2A፣ ሜሞሪ፣ ጋርድሬሎች፣ ኢቫልስ እና ከ5,100+ በላይ ክትትል የሚደረግባቸው የሙከራ ፋይሎች ላይ 39,000+ የማይንቀሳቀሱ የሙከራ መግለጫዎችን ጨምሮ።"/>
+<img src="./docs/diagrams/promise-pillars.svg" width="100%" alt="ቃል የተገባው — አንድ የመዳረሻ ነጥብ እና 367 አቅራቢዎች። ሌላ ጤናማ ዒላማ እስካለ ድረስ ራስ-ሰር መጠባበቂያው ማዘዋወሩን ይቀጥላል። ስድስት ምሰሶዎች፦ በ367 አቅራቢዎች መካከል የሚቋቋም መጠባበቂያ · ብቁ በሆኑ የሥራ ጫናዎች ላይ እስከ 95% የቶከን ቁጠባ · ከ150+ ነፃ ደረጃዎች እና 54 ተደጋጋሚ/ቁልፍ የማያስፈልጋቸው ለዘላለም ነፃ አቅራቢዎች ጋር በ$0 መጀመር · በአንድ ውቅር 36 የCLI/ወኪል ውህደቶች · በ/v1 ላይ ከOpenAI፣ Claude፣ Gemini እና Responses API ጋር ተኳሃኝነት · circuit breakers፣ TLS stealth፣ MCP 110 መሣሪያዎች፣ A2A፣ ማህደረ ትውስታ፣ መከላከያ ደንቦች፣ ግምገማዎች እና በ5,100+ ክትትል በሚደረግባቸው የሙከራ ፋይሎች ውስጥ 39,000+ የማይለዋወጡ የሙከራ መግለጫዎችን ጨምሮ የምርት መቆጣጠሪያዎች።"/>
 
 <br/>
 <br/>
 
 <div align="center">
 
-# 🤔 ለምን OmniRoute?
+# 🤔 OmniRoute ለምን?
 
 </div>
 
-<img src="./docs/diagrams/why-pain-fix.svg" width="100%" alt="ለምን OmniRoute — 10 ዳሽቦርዶችን፣ የሞቱ የኤፒአይ ቁልፎችን እና ያልተጠበቁ ሂሳቦችን ማስተናገድ ያቁሙ። አስር የዕለት ተዕለት ችግሮች ከ መፍትሄዎቻቸው ጋር: ያልተጠቀመ ኮታ ጊዜው እያለፈ → የደንበኝነት ምዝገባዎችን ከፍ ማድረግ፤ ኮድ በሚጽፉበት ጊዜ የፍጥነት ገደቦች → 4-ደረጃ አውቶማቲክ ምትኬ (ደንበኝነት ምዝገባ → API → ርካሽ → ነፃ)፤ የመሳሪያ ውጤቶች ቶከኖችን ማቃጠል → RTK + Caveman መጭመቂያ (15–95%)፤ ውድ ኤፒአይዎች → ወጪ-የተመቻቸ መስመር፤ እያንዳንዱ መሳሪያ የራሱ ቅንብር → አንድ የመጨረሻ ነጥብ፣ አንድ ዳሽቦርድ፤ AI ታግዷል → 3-ደረጃ ፕሮክሲ + TLS ስቴልዝ፤ የሞቱ ቁልፎች → 3-ንብርብር የመቋቋም ችሎታ (ሰርክዩት ብሬከሮች፣ ቁልፍ ማቀዝቀዝ፣ ሞዴል መቆለፍ)፤ ቡድን አንድ የደንበኝነት ምዝገባን መጋራት → ቁልፍ ገንዳዎች ከፍትሃዊ ድርሻ ኮታዎች ጋር፤ ጥያቄዎች በሌላ ሰው ክላውድ በኩል → በአካባቢ-መጀመሪያ በ AES-256-GCM የተመሰጠሩ ቁልፎች፤ የወጪ ታይነት የለም → የቀጥታ ትንታኔዎች (አጠቃቀም፣ ኮታ፣ ቁጠባ፣ p95 መዘግየት)።"/>
+<img src="./docs/diagrams/why-pain-fix.svg" width="100%" alt="OmniRoute ለምን — 10 ዳሽቦርዶችን፣ የማይሰሩ API ቁልፎችን እና ያልተጠበቁ ክፍያዎችን እያቀያየሩ መጠቀምዎን ያቁሙ። አሥር ዕለታዊ ችግሮች እና መፍትሔዎቻቸው፦ ኮታው ጥቅም ላይ ሳይውል ማብቃት → ምዝገባዎችን በከፍተኛው መጠቀም፤ ኮድ በሚጻፍበት መሃል የፍጥነት ገደቦች → ባለ4-ደረጃ ራስ-ሰር መጠባበቂያ (ምዝገባ → API → ርካሽ → ነፃ)፤ የመሣሪያ ውጤቶች ቶከኖችን ማባከን → RTK + Caveman መጭመቅ (15–95%)፤ ውድ APIዎች → ወጪን ያመቻቸ ማዘዋወር፤ እያንዳንዱ መሣሪያ የራሱ ቅንብር መኖሩ → አንድ የመዳረሻ ነጥብ፣ አንድ ዳሽቦርድ፤ AI መታገድ → ባለ3-ደረጃ ፕሮክሲ + TLS stealth፤ የማይሰሩ ቁልፎች → ባለ3-ንብርብር የመቋቋም ችሎታ (circuit breakers፣ የቁልፍ ማቀዝቀዣ ጊዜ፣ የሞዴል መቆለፊያ)፤ ቡድኑ አንድ ምዝገባ መጋራት → ፍትሐዊ-ድርሻ ኮታ ያላቸው የቁልፍ ስብስቦች፤ ጥያቄዎች በሌላ ሰው ደመና ውስጥ ማለፍ → ከAES-256-GCM በተመሰጠሩ ቁልፎች ጋር ለአካባቢያዊ አጠቃቀም ቅድሚያ፤ የወጪ ግልጽነት አለመኖር → ቀጥታ ትንታኔዎች (አጠቃቀም፣ ኮታ፣ ቁጠባ፣ p95 መዘግየት)።"/>
 
 <div align="center">
 
-<img src="./docs/diagrams/tier-cascade.svg" width="100%" alt="የOmniRoute ጥያቄ ፍሰት: የእርስዎ IDE ወይም CLI (Claude Code, Cursor, Cline…) አንድ የአካባቢ የመጨረሻ ነጥብ (http://localhost:20128/v1) ይጠራል፤ የOmniRoute ስማርት ራውተር (RTK + Caveman መጭመቂያ፣ 19 የማዞሪያ ስልቶች፣ ሰርክዩት ብሬከሮች፣ TLS ስቴልዝ፣ MCP፣ A2A፣ ጋርድሬሎች) ብቁ ጤናማ ኢላማ እስካለ ድረስ በ4 የአቅራቢ ደረጃዎች ላይ ምትኬ ሊጠቀም ይችላል — ደረጃ 1 የደንበኝነት ምዝገባ፣ ደረጃ 2 API ቁልፍ፣ ደረጃ 3 ርካሽ እና ደረጃ 4 ነፃ።"/>
+<img src="./docs/diagrams/tier-cascade.svg" width="100%" alt="የOmniRoute ጥያቄ ፍሰት፦ የእርስዎ IDE ወይም CLI (Claude Code፣ Cursor፣ Cline…) አንድ አካባቢያዊ የመዳረሻ ነጥብን (http://localhost:20128/v1) ይጠራል፤ OmniRoute Smart Router (RTK + Caveman መጭመቅ፣ 19 የማዘዋወር ስልቶች፣ circuit breakers፣ TLS stealth፣ MCP፣ A2A፣ መከላከያ ደንቦች) ብቁ የሆነ ጤናማ ዒላማ እስካለ ድረስ በ4 የአቅራቢ ደረጃዎች መካከል ወደ መጠባበቂያ ሊዞር ይችላል — ደረጃ 1 ምዝገባ፣ ደረጃ 2 API ቁልፍ፣ ደረጃ 3 ርካሽ እና ደረጃ 4 ነፃ።"/>
 
 </div>
 
@@ -488,13 +488,13 @@ curl http://localhost:20128/v1/chat/completions \
 
 <div align="center">
 
-## 🏆 ኦምኒሩት ልዩ የሚያደርገው ምንድን ነው
+## 🏆 OmniRouteን ልዩ የሚያደርገው
 
 </div>
 
-<img src="./docs/diagrams/comparison-table.svg" width="100%" alt="ኦምኒሩት ልዩ የሚያደርገው ምንድን ነው — 9router፣ OpenRouter፣ CLIProxyAPI እና LiteLLMን በ13 ችሎታዎች ላይ የሚያነፃፅር ጊዜ ያለፈበት የባህሪ ቅጽበታዊ ገጽ እይታ። ኦምኒሩት: 358 አቅራቢዎች፣ 150+ ነፃ ደረጃዎች አብሮ የተሰሩ፣ 19 የማዞሪያ ስልቶች፣ 12-ሞተር ቶከን መጭመቂያ፣ አብሮ የተሰራ የኤምሲፒ አገልጋይ ከ110 መሳሪያዎች ጋር፣ A2A ወኪል ፕሮቶኮል፣ ዘላቂ ማህደረ ትውስታ፣ የጥበቃ መስመሮች፣ የደመና ወኪሎች፣ TLS የጣት አሻራ ስውርነት፣ ዴስክቶፕ/ተርሙክስ/PWA እና 42 i18n UI አካባቢያዊ ቋንቋዎች። ኦምኒሩት በMIT ፍቃድ የተሰጠው እና በራስ የሚስተናገድ ነው። የተወዳዳሪዎች ችሎታዎች እና ብዛት ሊለወጡ ይችላሉ፤ የተገናኘውን ዘዴ ይመልከቱ።"/>
+<img src="./docs/diagrams/comparison-table.svg" width="100%" alt="OmniRouteን ልዩ የሚያደርገው — በ13 ችሎታዎች ላይ ከ9router፣ OpenRouter፣ CLIProxyAPI እና LiteLLM ጋር የተደረገ በተወሰነ ጊዜ የተወሰደ የባህሪያት ንጽጽር። OmniRoute፦ 367 አቅራቢዎች፣ 150+ አብረው የተካተቱ ነፃ ደረጃዎች፣ 19 የማዘዋወር ስልቶች፣ ባለ12-ሞተር የቶከን ማመቂያ፣ 110 መሣሪያዎች ያሉት አብሮ የተሰራ MCP አገልጋይ፣ A2A የወኪል ፕሮቶኮል፣ ቋሚ ማህደረ ትውስታ፣ መከላከያዎች፣ የደመና ወኪሎች፣ TLS የጣት አሻራ መሰወሪያ፣ Desktop/Termux/PWA እና 42 የi18n UI አካባቢያዊ ቋንቋዎች። OmniRoute በMIT ፈቃድ የተሰጠ ሲሆን በራስ አገልጋይ ላይ ማስተናገድ ይቻላል። የተወዳዳሪዎች ችሎታዎችና ቁጥሮች ሊለወጡ ይችላሉ፤ በአገናኙ ያለውን ዘዴ ይመልከቱ።"/>
 
-<sub>📊 ሙሉ ዘዴ እና የባህሪ ዝርዝር ከ9router፣ OpenRouter፣ CLIProxyAPI እና LiteLLM ጋር ሲነፃፀር → [`docs/comparison/OMNIROUTE_VS_ALTERNATIVES.md`](docs/comparison/OMNIROUTE_VS_ALTERNATIVES.md)</sub>
+<sub>📊 ሙሉ ዘዴውና የእያንዳንዱ ባህሪ ዝርዝር ከ9router፣ OpenRouter፣ CLIProxyAPI እና LiteLLM ጋር ሲነጻጸር → [`docs/comparison/OMNIROUTE_VS_ALTERNATIVES.md`](docs/comparison/OMNIROUTE_VS_ALTERNATIVES.md)</sub>
 
 <br/>
 
@@ -1264,19 +1264,19 @@ OMNIROUTE_SKIP_POSTINSTALL=1 npm install -g omniroute   # CI=1ም ይዘለዋ�
   <tr><td nowrap><b>የማስኬጃ አካባቢ</b></td><td>Node.js 22.x / 24.x LTS — <code>&gt;=22.22.2 &lt;23 || &gt;=24.0.0 &lt;27</code></td></tr>
   <tr><td nowrap><b>ቋንቋ</b></td><td>TypeScript 6.0 — በ<code>src/</code> እና <code>open-sse/</code> ውስጥ <b>100% TypeScript</b> (ከv2.0 ጀምሮ በዋናው ክፍል ዜሮ <code>any</code>)</td></tr>
   <tr><td nowrap><b>ማዕቀፍ</b></td><td>Next.js 16 + React 19 + Tailwind CSS 4</td></tr>
-  <tr><td nowrap><b>የውሂብ ጎታ</b></td><td>better-sqlite3 (SQLite፣ WAL መዝገብ አያያዝ) + LowDB (የቆየ JSON) — 137 የጎራ ሞጁሎች፣ 193 ፍልሰቶች</td></tr>
-  <tr><td nowrap><b>ማህደረ ትውስታ</b></td><td>SQLite FTS5 ሙሉ-ጽሑፍ + በint8 የተቆጠሩ የቬክተር ውክልናዎች፣ ዓይነት ያለው መዳከም</td></tr>
-  <tr><td nowrap><b>መርሀግብሮች</b></td><td>Zod 4 — የMCP መሣሪያ I/O ማረጋገጫ + የAPI ውሎች</td></tr>
+  <tr><td nowrap><b>የውሂብ ጎታ</b></td><td>better-sqlite3 (SQLite፣ WAL ጆርናሊንግ) + LowDB (የቀድሞ JSON) — 137 የጎራ ሞጁሎች፣ 200 ሽግግሮች</td></tr>
+  <tr><td nowrap><b>ማህደረ ትውስታ</b></td><td>SQLite FTS5 ሙሉ-ጽሑፍ + int8-quantized የቬክተር embeddings፣ ዓይነት የተወሰነለት decay</td></tr>
+  <tr><td nowrap><b>መርሃግብሮች</b></td><td>Zod 4 — የMCP መሣሪያ I/O ማረጋገጫ + የAPI ውሎች</td></tr>
   <tr><td nowrap><b>ፕሮቶኮሎች</b></td><td>MCP (stdio / HTTP / SSE) + A2A v0.3 (JSON-RPC 2.0 + SSE)</td></tr>
-  <tr><td nowrap><b>ዥረት ማስተላለፍ</b></td><td>Server-Sent Events (SSE) + የWebSocket ድልድይ (<code>/v1/ws</code>)</td></tr>
-  <tr><td nowrap><b>መጭመቂያ</b></td><td>ባለ12-ሞተር የሂደት ተከታታይ — RTK፣ Caveman፣ LLMLingua-2 (MobileBERT ONNX)፣ GCF፣ OmniGlyph</td></tr>
-  <tr><td nowrap><b>ማረጋገጫ &amp; ደህንነት</b></td><td>OAuth 2.0 (PKCE) + JWT + የAPI ቁልፎች + በMCP ወሰን የተገደበ ማረጋገጫ · በማከማቻ ጊዜ AES-256-GCM · DOMPurify</td></tr>
-  <tr><td nowrap><b>ድብቅነት</b></td><td>wreq-js — የJA3 / JA4 TLS አሻራ ማስመሰል፣ ባለ3-ደረጃ ፕሮክሲ</td></tr>
-  <tr><td nowrap><b>የመቋቋም ችሎታ</b></td><td>የወረዳ መቆራረጫ፣ ኤክስፖነንሻል የድጋሚ ሙከራ መዘግየት፣ የተቀናጀ የጥያቄ መጥለቅለቅ መከላከያ፣ በራስ-ሰር የሚጣመር ራስን የመጠገን ስርዓት</td></tr>
-  <tr><td nowrap><b>ምዝገባ</b></td><td>pino — የጥያቄ ዐውድ ያላቸው የተዋቀሩ JSON ምዝግቦች</td></tr>
-  <tr><td nowrap><b>ሙከራ</b></td><td>የNode.js ሙከራ አስኬጅ + Vitest — በ5,100+ ክትትል በሚደረግባቸው የሙከራ ፋይሎች ውስጥ <b>39,000+ የማይለዋወጡ የሙከራ መግለጫዎች</b> (አሃድ፣ ውህደት፣ E2E፣ ደህንነት፣ ሥነ-ምህዳር)</td></tr>
+  <tr><td nowrap><b>ዥረት ማስተላለፍ</b></td><td>Server-Sent Events (SSE) + WebSocket ድልድይ (<code>/v1/ws</code>)</td></tr>
+  <tr><td nowrap><b>መጭመቅ</b></td><td>ባለ12-ኤንጂን pipeline — RTK, Caveman, LLMLingua-2 (MobileBERT ONNX), GCF, OmniGlyph</td></tr>
+  <tr><td nowrap><b>ማረጋገጫ &amp; ደህንነት</b></td><td>OAuth 2.0 (PKCE) + JWT + API Keys + የMCP ወሰን-ተኮር ማረጋገጫ · በማከማቻ ጊዜ AES-256-GCM · DOMPurify</td></tr>
+  <tr><td nowrap><b>ስውርነት</b></td><td>wreq-js — የJA3 / JA4 TLS አሻራ ማስመሰል፣ ባለ3-ደረጃ proxy</td></tr>
+  <tr><td nowrap><b>ጽናት</b></td><td>Circuit breaker፣ exponential backoff፣ anti-thundering-herd፣ ራስ-ሰር combo ራስን መጠገን</td></tr>
+  <tr><td nowrap><b>ምዝግብ ማስቀመጥ</b></td><td>pino — የጥያቄ ዐውድ ያላቸው የተዋቀሩ JSON ምዝግቦች</td></tr>
+  <tr><td nowrap><b>ሙከራ</b></td><td>Node.js test runner + Vitest — በ5,100+ ክትትል በሚደረግባቸው የሙከራ ፋይሎች ውስጥ <b>39,000+ የማይለወጡ የሙከራ መግለጫዎች</b> (unit፣ integration፣ E2E፣ ደህንነት፣ ecosystem)</td></tr>
   <tr><td nowrap><b>መድረኮች</b></td><td>ዴስክቶፕ (Electron) · Android (Termux) · PWA (ማንኛውም አሳሽ)</td></tr>
-  <tr><td nowrap><b>CI/CD</b></td><td>GitHub Actions — በልቀት ጊዜ በራስ-ሰር ወደ npm ማተም + Docker Hub</td></tr>
+  <tr><td nowrap><b>CI/CD</b></td><td>GitHub Actions — ሲለቀቅ ራስ-ሰር ወደ npm ማተም + Docker Hub</td></tr>
   <tr><td nowrap><b>አገናኞች</b></td><td><a href="https://omniroute.online">ድረ-ገጽ</a> · <a href="https://www.npmjs.com/package/omniroute">npm</a> · <a href="https://hub.docker.com/r/diegosouzapw/omniroute">Docker Hub</a></td></tr>
 </table>
 

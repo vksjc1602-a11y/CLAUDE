@@ -210,19 +210,19 @@ Gerelateerde mechanismen blijven gescheiden:
 **Sleutelbereik per status:** de foutstatus bepaalt naar welke sleutel een vergrendeling
 wordt geschreven (`resolveLockoutScope()` in `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — een quota- of rechtensignaal — vergrendelt de **quotafamilie**:
+- `429` / `403` / `402` — een signaal voor quotum of gebruiksrecht — vergrendelt de **quotumfamilie**:
   voor codex het volledige `codex`- / `spark`-bereik (elk `gpt-5*`-model van de
   verbinding), voor andere providers `getQuotaScopedModelForProvider()`.
-- `404` vergrendelt het basismodel (`getModelLockKey()` beperkt `not_found`).
+- `404` vergrendelt het kale model (`getModelLockKey()` beperkt `not_found`).
 - Elke andere status — `5xx`-transport-/serverfouten en OmniRoute's eigen
-  gegenereerde `502` uit kwaliteitsvalidatie — vergrendelt alleen de **exacte**
-  combinatie van provider/verbinding/model. Een ongeldige stream voor één model is geen bewijs
-  voor het quota van het account; vóór deze regel verwijderde één leeg antwoord van
+  gesynthetiseerde `502` uit kwaliteitsvalidatie — vergrendelt alleen de **exacte**
+  combinatie van provider/verbinding/model. Een slechte stream voor één model vormt geen bewijs
+  voor het quotum van het account; vóór deze regel verwijderde één lege respons voor
   `codex/gpt-5.6-luna` elk `gpt-5*`-model van die verbinding gedurende
-  2–30 min (oplopend) uit de routering, terwijl het quota onaangetast bleef.
-- Een expliciete `scope`-optie van een aanroeper heeft altijd voorrang (Antigravity geeft `"exact"` door).
+  2–30 min (oplopend) uit de routering, terwijl het quotum onaangetast bleef.
+- De expliciete optie `scope` van een aanroeper heeft altijd voorrang (Antigravity geeft `"exact"` door).
 
-**Doel:** voorkomen dat een volledige verbinding wordt uitgeschakeld wanneer slechts één model niet beschikbaar is of door een quota wordt beperkt.
+**Doel:** voorkomen dat een volledige verbinding wordt uitgeschakeld wanneer slechts één model niet beschikbaar is of door een quotum wordt beperkt.
 
 **Voorbeelden:**
 
@@ -232,74 +232,139 @@ wordt geschreven (`resolveLockoutScope()` in `open-sse/services/accountFallback/
 
 **Implementatie:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Dashboard voor modelafkoelperiodes (v3.8.0)
+### Dashboard voor modelafkoelperioden (v3.8.0)
 
-UI: Instellingen → Modelafkoelperiodes (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+UI: Instellingen → Modelafkoelperioden (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Toont actieve vergrendelingen met: provider, verbinding, model, reden, expiresAt. Beheerders kunnen via de kaart handmatig een model opnieuw inschakelen.
+Toont actieve vergrendelingen met: provider, verbinding, model, reden, expiresAt. Operators kunnen vanaf de kaart handmatig een model opnieuw inschakelen.
 
 **REST API:**
 
 - `GET /api/resilience/model-cooldowns` — actieve vergrendelingen weergeven
-- `DELETE /api/resilience/model-cooldowns` — handmatig opnieuw inschakelen. Body: `{provider, connection, model}`. Authenticatie: beheer.
+- `DELETE /api/resilience/model-cooldowns` — handmatig opnieuw inschakelen. Body: `{provider, connection, model}`. Auth: beheer.
 
-### UI voor vergrendelingsinstellingen + herstel via verval bij succes (v3.8.23)
+### Afkoelbeheer
+
+UI: Monitoring → Afkoelbeheer (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Eén pagina voor elke verbinding die om een tijdelijke reden niet in de routering zit, in plaats van
+elke providerpagina te openen. De pagina toont afkoelperioden van verbindingen, modelvergrendelingen en terminale
+statussen, wist deze per verbinding, voor een selectie of voor alle verbindingen van een provider,
+en bewerkt de meest verfijnde afkoelregels: `streamStallCooldown.enabled` en de basisafkoelperiode en
+het maximale aantal back-offstappen van `connectionCooldown` voor OAuth / API-sleutels (opgeslagen via
+`PATCH /api/resilience`). Terminale statussen (`banned`, `expired`, `credits_exhausted`) worden
+weergegeven, maar hier nooit gewist.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, auth: beheer):
+
+- `GET /api/resilience/cooldowns[?provider=]` — verbindingen met status, resterende afkoelperiode,
+  back-offniveau, laatste fouttype en modelvergrendelingen (geen aanmeldgegevens)
+- `POST /api/resilience/cooldowns` — body `{connectionIds: string[]}` of
+  `{all: true, provider?}`; retourneert `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI voor vergrendelingsinstellingen + herstel door afname bij succes (v3.8.23)
 
 Modelvergrendeling veranderde van altijd ingeschakeld, hardgecodeerd gedrag in een volledig configureerbare,
 optionele functie met een eigen instellingenkaart en een zelfherstellend herstelpad.
 
 **Instellingenkaart:** Instellingen → Modelvergrendeling
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Deze is **afzonderlijk** van de alleen-lezen `ModelCooldownsCard` hierboven (die alleen
+Deze is **onderscheiden** van de alleen-lezen `ModelCooldownsCard` hierboven (die alleen
 actieve vergrendelingen _weergeeft_) — de nieuwe kaart _configureert de parameters_. Standaardwaarden
 staan in `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Instelling              | Standaardwaarde                  | Betekenis                                                            |
+| Instelling              | Standaard                        | Betekenis                                                            |
 | ----------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | `enabled`               | `false`                          | Hoofdschakelaar — modelvergrendeling is **standaard uitgeschakeld**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Upstreamstatussen die gelden als een modelspecifieke fout.           |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Upstream-statussen die gelden als een modelgebonden fout.            |
 | `baseCooldownMs`        | `120_000` (120 s)                | Initiële vergrendelingsduur voor de eerste fout.                     |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Bovengrens voor de oplopende afkoelperiode.                          |
-| `maxBackoffSteps`       | `10`                             | Maximaal aantal exponentiële back-off-escalatiestappen.              |
-| `useExponentialBackoff` | `true`                           | Of herhaalde fouten de afkoelperiode exponentieel verlengen.         |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Bovengrens voor de opgelopen afkoelperiode.                          |
+| `maxBackoffSteps`       | `10`                             | Maximaal aantal exponentiële back-offstappen.                        |
+| `useExponentialBackoff` | `true`                           | Of herhaalde fouten de afkoelperiode exponentieel verhogen.          |
 
-Instellingen worden opgeslagen via de normale instellingenopslag en gevalideerd met het
+Instellingen worden bewaard via de normale instellingenopslag en gevalideerd via het
 schema voor veerkrachtinstellingen; de kaart begrenst `baseCooldownMs`/`maxCooldownMs`
 (waarbij `maxCooldownMs ≥ baseCooldownMs`) en `maxBackoffSteps`.
 
-**Herstel via verval bij succes:** herstel is **niet** uitsluitend gebaseerd op het verstrijken van de timer. Een gezond
-antwoord verlaagt het aantal fouten van het model stapsgewijs, zodat een model dat
-halverwege het tijdsvenster is hersteld, stopt met escaleren (en wordt vrijgegeven) voordat de timer dat zou doen. Bij een succesvol
+**Herstel door afname bij succes:** herstel vindt **niet** uitsluitend plaats doordat de timer verloopt. Een gezonde
+respons verlaagt het aantal fouten van het model, zodat een model dat halverwege het venster is hersteld
+niet verder escaleert (en wordt vrijgegeven) voordat de timer zou aflopen. Bij een succesvol
 combinatiedoel roept `open-sse/services/combo.ts` `decayModelFailureCount()` aan
 (`open-sse/services/accountFallback.ts`), dat de opgeslagen
 `failureCount` **halveert** (`Math.floor(failureCount / 2)`); wanneer deze `0` bereikt, wordt de vergrendelingsvermelding
 volledig verwijderd. De tegenhanger `recordModelLockoutFailure()`
-verhoogt het aantal (en verlengt de afkoelperiode) bij fouten binnen het
-escalatievenster. Dit verval bij succes komt boven op het reguliere verstrijken van de timer —
+verhoogt het aantal (en escaleert de afkoelperiode) bij fouten binnen het
+escalatievenster. Deze afname bij succes vormt een aanvulling op het simpelweg verlopen van de timer —
 beide paden kunnen een model opnieuw inschakelen.
 
-**Status:** vergrendelingen worden **in het geheugen** bewaard (`Map`s per proces van
-`ModelLockoutEntry`, geïndexeerd op `provider:connectionId:model`, met vergrendelingen met exact bereik geïndexeerd op
-`provider:connectionId:exact:model`) en niet opgeslagen in
-de database — ze gaan verloren bij een herstart. De _instellingen_ worden opgeslagen; de actieve
+**Status:** vergrendelingen worden **in het geheugen** bijgehouden (`Map`s per proces van
+`ModelLockoutEntry`, met als sleutel `provider:connectionId:model`; vergrendelingen met exact bereik met als sleutel
+`provider:connectionId:exact:model`) en worden niet opgeslagen in
+de DB — ze gaan verloren bij een herstart. De _instellingen_ worden opgeslagen; de actieve
 _vergrendelingsstatus_ is tijdelijk.
 
 ---
 
-## 4. Gelijktijdigheidsbeheer voor quotadeling (v3.8.36)
+## 4. Gelijktijdigheidsbeheer voor quota-share (v3.8.36)
 
 Abonnementsaccounts (GLM, MiniMax, enz.) accepteren vaak slechts ~1–3 gelijktijdige
-verzoeken; wanneer dit aantal wordt overschreden, leidt dit tot 429-fouten en afkoelperioden. Dit probleem is vooral acuut bij
+verzoeken; overschrijding daarvan veroorzaakt 429-responsen en afkoelperioden. Dit is vooral merkbaar bij
 **quota-share**-combinaties (`qtSd/…`), waarbij meerdere API-sleutels één upstream-
 account delen. Drie lagen voorkomen dat een gedeeld account wordt overspoeld.
 
 ### Gelijktijdigheidslimiet per verbinding (`max_concurrent`)
 
-Elke providerverbinding kan een bovengrens voor `max_concurrent` declareren
-(`provider_connections.max_concurrent`, ingesteld in het verbindingsvenster / via de API / in de database).
+Elke providerverbinding kan een `max_concurrent`-bovengrens declareren
+(`provider_connections.max_concurrent`, ingesteld in het verbindingsvenster / via de API / in de DB).
 Laat deze leeg voor geen limiet. Dit is de enige instelling die de onderstaande serialisatielaag
 aanstuurt — stel deze in op de werkelijke gelijktijdigheid van het account (bijv. GLM ~1, MiniMax ~2).
+
+### Gelijktijdigheidslimieten per model (`modelConcurrency`)
+
+Een verbinding kan daarnaast exacte gelijktijdigheidslimieten per model declareren
+in de bijbehorende `rateLimitOverrides`-map:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Stel dit in via het verbindingsvenster (**Overschrijvingen van snelheidslimieten → Gelijktijdigheidslimieten
+per model**, één `model=cap` per regel) of via
+`PATCH /api/providers/[id]` met dezelfde JSON-structuur. Semantiek van de sleutels:
+
+- **Verbindingsbreed versus modelspecifiek:** `maxConcurrent` blijft de gedeelde
+  verbindingsbrede bovengrens. Wanneer beide van toepassing zijn, worden beide poorten
+  atomair verkregen in dezelfde samengestelde poort
+  (`global → provider → account → model`); de strengste toepasselijke limiet
+  bepaalt het effectieve gedrag.
+- **Exacte overeenkomst van modelsleutel:** de sleutel is de modeltekenreeks die na
+  routeringsresolutie aan de executor wordt doorgegeven — normaal gesproken de kale upstream-model-id
+  (`glm-5`), niet een client-side `provider/model`-alias (`zai/glm-5` komt niet
+  overeen met `glm-5`). Waarden zijn positieve gehele bovengrenzen voor gelijktijdige verzoeken.
+- **Lokale wachtrij, geen detectie:** overtollige verzoeken worden lokaal in de wachtrij geplaatst met de
+  bestaande wachtrij-/timeoutsemantiek (getypeerde toelatingsfouten `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute detecteert of
+  leidt upstreambeleid niet af — het handhaaft exact de bovengrenzen die de beheerder
+  heeft geconfigureerd. Een verzadigde modelpoort schakelt de provider nooit uit en
+  veroorzaakt nooit een permanente modelblokkering; upstreamgedrag voor 429-responsen, afkoelperioden en fallbacks
+  blijft het vangnet voor fouten.
+- **Bereik per verbinding, per proces:** limieten gelden per databaseverbinding
+  en worden in het geheugen bijgehouden, waardoor twee verbindingen die dezelfde upstream-API-sleutel
+  hergebruiken, niet met elkaar worden gecoördineerd.
+- **Niet geconfigureerd betekent ongewijzigd:** het weglaten van de map (of het leeg laten van het
+  dashboardveld) voegt geen modelpoort toe. Voorbeeldconfiguratie zonder
+  een universele providerlimiet te veronderstellen:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Serialisatie van quota-share-verzoeken
 
@@ -307,25 +372,25 @@ Wanneer een quota-share-dispatch is gericht op een verbinding die een positieve
 `max_concurrent` declareert, worden gelijktijdige verzoeken aan dat **account** geserialiseerd via een
 semafoor per verbinding (sleutel `qsconn:<connectionId>`): overtollige verzoeken **wachten in
 de wachtrij** in plaats van het account te overspoelen. Dit werkt volgens het **fail-open**-principe — bij een verzadigde
-wachtrij of time-out wordt zonder slot doorgegaan, in plaats van ooit een dispatchbaar
-verzoek af te wijzen. Schakel dit in of uit via **Instellingen → Veerkracht → Gelijktijdigheid per verbinding
-voor quota-share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standaard
+wachtrij of timeout wordt zonder slot doorgegaan, zodat een dispatchbaar
+verzoek nooit wordt geweigerd. Schakel dit in of uit via **Instellingen → Veerkracht → Gelijktijdigheid
+per quota-share-verbinding** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, standaard
 ingeschakeld). Zonder een `max_concurrent`-limiet blijft het gedrag ongewijzigd.
 
 > De routeringspoort voor quota-share (`selectQuotaShareTarget`, DRR + P2C) werkt zelf
 > volgens het fail-open-principe en geeft een verbinding die de limiet heeft bereikt alleen een _lagere prioriteit_ — met een
-> pool met één verbinding kan deze geen harde limiet afdwingen, dus deze semafoor houdt de
-> toestroom daadwerkelijk onder controle.
+> pool van één verbinding kan deze geen harde limiet afdwingen, dus deze semafoor beperkt de toevloed
+> daadwerkelijk.
 
-### Herpoging met inachtneming van de afkoelperiode voor combinaties
+### Afkoelperiodebewuste nieuwe poging voor combinaties
 
-Voor elke combinatiestrategie (indien ingeschakeld) wacht een verzoek dat een 429-fout
-zou opleveren vanwege een KORTE tijdelijke afkoelperiode totdat deze voorbij is en wordt het opnieuw
-verzonden, in plaats van de 429-fout te retourneren — dit dekt TPM-/RPM-vensters van de Gemini-klasse
-(~60s retry-after) voor combinaties met meerdere modellen, bijvoorbeeld wanneer beide doelen van een combinatie met 2 modellen
-een frequentielimiet per model bereiken. Begrensd door `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) in **Instellingen → Veerkracht**. Er wordt nooit gewacht bij `quota_exhausted`
-(vergrendeld tot middernacht) of bij redenen die verband houden met authenticatie/niet gevonden.
+Voor elke combinatiestrategie (wanneer ingeschakeld) wacht een verzoek dat een 429-respons
+voor een KORTE tijdelijke afkoelperiode definitief zou maken totdat deze voorbij is en wordt het opnieuw
+verzonden in plaats van de 429-respons terug te geven — dit dekt TPM-/RPM-vensters van de Gemini-klasse
+(~60s retry-after) bij combinaties met meerdere modellen, bijvoorbeeld wanneer beide doelen van een combinatie met 2 modellen
+een snelheidslimiet per model bereiken. Begrensd door `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) onder **Instellingen → Veerkracht**. Er wordt nooit gewacht bij `quota_exhausted`
+(vergrendeld tot middernacht) of om authenticatie-/niet-gevondenredenen.
 
 ---
 

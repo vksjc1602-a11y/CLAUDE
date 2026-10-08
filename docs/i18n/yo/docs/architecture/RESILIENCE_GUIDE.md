@@ -218,129 +218,193 @@ ipò waiting-for-capacity, àti `Retry-After` tó ní ààlà tí a mú láti in
 
 ---
 
-## 3. Ìdènà Módẹ́lì
+## 3. Ìdènà Àwòṣe
 
-**Ìwọ̀n:** àkójọpọ̀ olùpèsè + àsopọ̀ + módẹ́lì.
+**Ààlà:** àkójọpọ̀ mẹ́ta ti olùpèsè + ìsopọ̀ + àwòṣe.
 
-**Ìwọ̀n kọ́kọ́rọ́ gẹ́gẹ́ bí ipò:** ipò tó kùnà ló pinnu kọ́kọ́rọ́ tí ìdènà yóò kọ sí
-(`resolveLockoutScope()` nínú `open-sse/services/accountFallback/exactModelLock.ts`):
+**Ààlà kọ́kọ́rọ́ gẹ́gẹ́ bí ipò:** ipò ìkùnà ló pinnu kọ́kọ́rọ́ tí ìdènà yóò kọ
+sí (`resolveLockoutScope()` nínú `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — àmì ìpín ìlò tàbí ẹ̀tọ́ — dènà **ẹbí ìpín ìlò**:
-  fún codex, gbogbo ìwọ̀n `codex` / `spark` (gbogbo módẹ́lì `gpt-5*` ti
-  àsopọ̀ náà), fún àwọn olùpèsè mìíràn `getQuotaScopedModelForProvider()`.
-- `404` máa ń dènà módẹ́lì náà gan-an (`getModelLockKey()` máa ń dín `not_found` kù).
-- Ipò èyíkéyìí mìíràn — àwọn ìkùnà ìgbékalẹ̀/asẹ́vá `5xx` àti `502` tí OmniRoute
-  fúnra rẹ̀ dá sílẹ̀ láti inú ìfọwọ́sí dídára — máa ń dènà àkójọpọ̀ **gan-an**
-  ti olùpèsè/àsopọ̀/módẹ́lì nìkan. Ìṣàn búburú lórí módẹ́lì kan kì í ṣe ẹ̀rí
-  nípa ìpín ìlò àkọọ́lẹ̀ náà; ṣáájú òfin yìí, ìdáhùn òfo kan lórí
-  `codex/gpt-5.6-luna` máa ń yọ gbogbo módẹ́lì `gpt-5*` ti àsopọ̀ náà kúrò
-  nínú ìdarí fún ìṣẹ́jú 2–30 (tó ń pọ̀ sí i), bó tilẹ̀ jẹ́ pé ìpín ìlò rẹ̀ kò yí padà.
-- Àṣàyàn `scope` tí olùpè kan sọ ní kedere máa ń borí ní gbogbo ìgbà (Antigravity máa ń fi `"exact"` ránṣẹ́).
+- `429` / `403` / `402` — àmì ìwọ̀n-lílo tàbí ẹ̀tọ́ — dènà **ẹbí ìwọ̀n-lílo**:
+  fún codex, gbogbo ààlà `codex` / `spark` (gbogbo àwòṣe `gpt-5*` ti
+  ìsopọ̀ náà), fún àwọn olùpèsè mìíràn `getQuotaScopedModelForProvider()`.
+- `404` máa ń dènà àwòṣe náà nìkan (`getModelLockKey()` máa ń dín `not_found` kù).
+- Ipò èyíkéyìí mìíràn — àwọn ìkùnà ìrìnàjò/asẹ́vá `5xx` àti `502` tí OmniRoute
+  fúnra rẹ̀ ṣẹ̀dá láti inú ìfọwọ́sí ànímọ́ — máa ń dènà **ìṣọ̀kan pàtó**
+  olùpèsè/ìsopọ̀/àwòṣe náà nìkan. Sísàn búburú lórí àwòṣe kan kì í ṣe ẹ̀rí
+  nípa ìwọ̀n-lílo àkọọ́lẹ̀ náà; ṣáájú òfin yìí, èsì òfìfo kan lórí
+  `codex/gpt-5.6-luna` máa ń yọ gbogbo àwòṣe `gpt-5*` ti ìsopọ̀ yẹn kúrò
+  nínú ìdarí fún ìṣẹ́jú 2–30 (tí ó ń pọ̀ sí i) nígbà tí ìwọ̀n-lílo rẹ̀ kò yí padà.
+- Àṣàyàn `scope` tí olùpè bá sọ ní kedere máa ń borí ní gbogbo ìgbà (Antigravity máa ń fi `"exact"` ránṣẹ́).
 
-**Ète:** láti yẹra fún pípa gbogbo àsopọ̀ kan, nígbà tí módẹ́lì kan ṣoṣo ni kò sí tàbí tí ìpín ìlò rẹ̀ ti ní ààlà.
+**Ète:** láti yẹra fún pípa gbogbo ìsopọ̀ kan nígbà tí àwòṣe kan ṣoṣo ni kò sí tàbí tí ìwọ̀n-lílo rẹ̀ ní ààlà.
 
 **Àwọn àpẹẹrẹ:**
 
-- Àwọn olùpèsè ìpín ìlò fún módẹ́lì kọ̀ọ̀kan tí ń dá `429` padà
-- Àwọn olùpèsè abẹ́lẹ̀ tí ń dá `404` padà fún módẹ́lì kan tí kò sí
-- Àwọn ìkùnà ìgbaniláyè tó jẹ́ pàtó sí ipò/módẹ́lì olùpèsè (fún àpẹẹrẹ, àwọn ipò Grok)
+- Àwọn olùpèsè tí ìwọ̀n-lílo wọn dá lórí àwòṣe kọ̀ọ̀kan, tí wọ́n ń dá `429` padà
+- Àwọn olùpèsè abẹ́lé tí wọ́n ń dá `404` padà fún àwòṣe kan tí kò sí
+- Àwọn ìkùnà igbaniláyè fún ìpo/àwòṣe tí ó jẹ́ ti olùpèsè kan pàtó (fún àpẹẹrẹ, àwọn ìpo Grok)
 
 **Ìmúṣẹ:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Pátákó Ìṣàkóso Àkókò Ìsinmi Módẹ́lì (v3.8.0)
+### Pánẹ́ẹ̀lì Àkókò Ìsinmi Àwòṣe (v3.8.0)
 
-UI: Settings → Model Cooldowns (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+UI: Àwọn Ètò → Àwọn Àkókò Ìsinmi Àwòṣe (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Ó ṣàkójọ àwọn ìdènà tó ń ṣiṣẹ́ pẹ̀lú: olùpèsè, àsopọ̀, módẹ́lì, ìdí, expiresAt. Àwọn olùṣàkóso lè tún módẹ́lì kan ṣiṣẹ́ pẹ̀lú ọwọ́ láti inú káàdì náà.
+Ó ṣe àtòjọ àwọn ìdènà tó ń ṣiṣẹ́ pẹ̀lú: olùpèsè, ìsopọ̀, àwòṣe, ìdí, expiresAt. Àwọn alámójútó lè tún àwòṣe kan ṣiṣẹ́ pẹ̀lú ọwọ́ láti inú káàdì náà.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — ṣàkójọ àwọn ìdènà tó ń ṣiṣẹ́
-- `DELETE /api/resilience/model-cooldowns` — tún ṣiṣẹ́ pẹ̀lú ọwọ́. Ara: `{provider, connection, model}`. Ìfàṣẹsí: ìṣàkóso.
+- `GET /api/resilience/model-cooldowns` — ṣe àtòjọ àwọn ìdènà tó ń ṣiṣẹ́
+- `DELETE /api/resilience/model-cooldowns` — tún un ṣiṣẹ́ pẹ̀lú ọwọ́. Ara: `{provider, connection, model}`. Ìfàṣẹsí: ìṣàkóso.
 
-### UI ètò ìdènà + ìmúláradá ìdínkù nígbà àṣeyọrí (v3.8.23)
+### Olùṣàkóso Àkókò Ìsinmi
 
-Ìdènà módẹ́lì yí padà láti ìhùwàsí tí a kọ sínú kóòdù tí ó sì máa ń ṣiṣẹ́ nígbà gbogbo sí ẹ̀yà
-tí a lè ṣètò ní kíkún, tí a sì gbọ́dọ̀ yàn láti ṣiṣẹ́, pẹ̀lú káàdì ètò tirẹ̀ àti ọ̀nà ìmúláradá tó ń tún ara rẹ̀ ṣe.
+UI: Àbójútó → Olùṣàkóso Àkókò Ìsinmi (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Káàdì ètò:** Settings → Model Lockout
+Ojú-ìwé kan fún gbogbo ìsopọ̀ tí a yọ kúrò nínú ìdarí fún ìdí àkókò díẹ̀, dípò
+ṣíṣí ojú-ìwé olùpèsè kọ̀ọ̀kan. Ó ṣe àtòjọ àwọn àkókò ìsinmi ìsopọ̀, àwọn ìdènà àwòṣe àti àwọn
+ipò òpin, ó sì máa ń mú wọn kúrò fún ìsopọ̀ kọ̀ọ̀kan, fún àṣàyàn kan, tàbí fún gbogbo àwọn ìsopọ̀ olùpèsè kan,
+ó sì ń ṣàtúnṣe àwọn òfin àkókò ìsinmi tí a ti túnṣe jù lọ: `streamStallCooldown.enabled` àti àkókò ìsinmi ìpìlẹ̀ OAuth / API-key
+`connectionCooldown` àti iye ìgbésẹ̀ ìfàsẹ́yìn tó pọ̀ jù (tí a fi pamọ́ nípasẹ̀
+`PATCH /api/resilience`). Àwọn ipò òpin (`banned`, `expired`, `credits_exhausted`) wà
+nínú àtòjọ ṣùgbọ́n a kì í mú wọn kúrò níbí.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, ìfàṣẹsí: ìṣàkóso):
+
+- `GET /api/resilience/cooldowns[?provider=]` — àwọn ìsopọ̀ pẹ̀lú ipò, àkókò ìsinmi tó kù,
+  ipele ìfàsẹ́yìn, irú àṣìṣe tó ṣẹ̀ṣẹ̀ wáyé àti àwọn ìdènà àwòṣe (kò ní ìwé-ẹ̀rí ìwọlé)
+- `POST /api/resilience/cooldowns` — ara `{connectionIds: string[]}` tàbí
+  `{all: true, provider?}`; ó dá `{cleared, unchanged, skippedTerminal, lockoutsCleared}` padà
+
+### UI àwọn ètò ìdènà + ìmúpadàbọ̀ ìdínkù-lórí-àṣeyọrí (v3.8.23)
+
+Ìdènà àwòṣe yí padà láti ìhùwàsí tí a kọ sínú kóòdù, tí ó sì máa ń ṣiṣẹ́ ní gbogbo ìgbà, sí ẹ̀yà tí a lè
+ṣètò ní kíkún, tí a gbọ́dọ̀ yàn láti lò, pẹ̀lú káàdì ètò tirẹ̀ àti ọ̀nà ìmúpadàbọ̀ tó lè wo ara rẹ̀ sàn.
+
+**Káàdì ètò:** Àwọn Ètò → Ìdènà Àwòṣe
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Èyí **yàtọ̀** sí `ModelCooldownsCard` ti kíkà-nìkan tó wà lókè (èyí tó kan
-_ṣàkójọ_ àwọn ìdènà tó ń ṣiṣẹ́) — káàdì tuntun náà _ń ṣètò àwọn pàrámítà_. Àwọn iye àkọ́kọ́
+Èyí **yàtọ̀** sí `ModelCooldownsCard` kíkà-nìkan tó wà lókè (èyí tí ó kàn
+_ṣe àtòjọ_ àwọn ìdènà tó ń ṣiṣẹ́) — káàdì tuntun náà _ń ṣètò àwọn pàrámítà_. Àwọn iye àkọ́kọ́
 wà nínú `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Ètò                     | Iye àkọ́kọ́                        | Ìtumọ̀                                                                            |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Yíyí àgbà — ìdènà módẹ́lì **wà ní pípa ní iye àkọ́kọ́**.                            |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Àwọn ipò orísun òkè tí a kà sí ìkùnà tó ní ìwọ̀n módẹ́lì.                          |
-| `baseCooldownMs`        | `120_000` (120 s)                | Gígùn ìdènà àkọ́kọ́ fún ìkùnà àkọ́kọ́.                                               |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Òpin àkókò ìsinmi tó ti pọ̀ sí i.                                                 |
-| `maxBackoffSteps`       | `10`                             | Iye ìgbésẹ̀ gíga jù lọ fún ìlọsíwájú ìdádúró olùkùnsìn.                           |
-| `useExponentialBackoff` | `true`                           | Bóyá àwọn ìkùnà tó ń ṣẹlẹ̀ léraléra yóò mú àkókò ìsinmi pọ̀ sí i ní ọ̀nà olùkùnsìn. |
+| Ètò                     | Iye àkọ́kọ́                        | Ìtumọ̀                                                                 |
+| ----------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Yíyípadà àgbà — ìdènà àwòṣe **wà ní pípa ní àkọ́kọ́**.                  |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Àwọn ipò láti ọ̀dọ̀ olùpèsè òkè tí a kà sí ìkùnà tó dá lórí àwòṣe.      |
+| `baseCooldownMs`        | `120_000` (120 s)                | Gígùn ìdènà àkọ́kọ́ fún ìkùnà àkọ́kọ́.                                    |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Òpin gíga fún àkókò ìsinmi tí ó ń pọ̀ sí i.                            |
+| `maxBackoffSteps`       | `10`                             | Iye ìgbésẹ̀ ìfàsẹ́yìn onítẹ̀lé tó pọ̀ jù.                                 |
+| `useExponentialBackoff` | `true`                           | Bóyá àwọn ìkùnà àsọtúnṣe máa mú kí àkókò ìsinmi pọ̀ sí i lọ́nà onítẹ̀lé. |
 
-Àwọn ètò máa ń wà pẹ́ nípasẹ̀ ibi ìpamọ́ ètò déédéé, wọ́n sì máa ń jẹ́rìí nípasẹ̀
-àwòrán ètò ìfaradà; káàdì náà máa ń fi ààlà sí `baseCooldownMs`/`maxCooldownMs`
+Àwọn ètò máa ń dúró nípasẹ̀ ibi ìpamọ́ ètò àkànṣe, a sì máa ń fọwọ́sí wọn nípasẹ̀
+àwòrán ètò ìfaradà; káàdì náà máa ń fi òpin sí `baseCooldownMs`/`maxCooldownMs`
 (pẹ̀lú `maxCooldownMs ≥ baseCooldownMs`) àti `maxBackoffSteps`.
 
-**Ìmúláradá ìdínkù nígbà àṣeyọrí:** ìmúláradá **kì í ṣe** ìparí aago nìkan. Ìdáhùn
-tó ní ìlera máa ń dín iye ìkùnà módẹ́lì náà kù, kí módẹ́lì tó ti bọ̀ sípò
-láàárín àkókò má bàa tẹ̀síwájú ní pípọ̀ sí i (kí ó sì tú ìdènà) ṣáájú kí aago rẹ̀ tó parí. Lórí ibi àfojúsùn
-àpapọ̀ tó ṣàṣeyọrí, `open-sse/services/combo.ts` máa ń pe `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), èyí tó máa ń **pín** `failureCount`
-tí a fipamọ́ sí ìdajì (`Math.floor(failureCount / 2)`); nígbà tó bá dé `0`, a ó pa
-àkọsílẹ̀ ìdènà náà rẹ́ pátápátá. Ẹgbẹ́ kejì rẹ̀, `recordModelLockoutFailure()`,
-máa ń fi ọ̀kan kún iye náà (ó sì máa ń mú àkókò ìsinmi pọ̀ sí i) fún àwọn ìkùnà láàárín
-àkókò ìlọsíwájú. Ìdínkù nígbà àṣeyọrí yìí wà ní àfikún sí ìparí aago lásán —
-ọ̀nà méjèèjì lè tún módẹ́lì kan ṣiṣẹ́.
+**Ìmúpadàbọ̀ ìdínkù-lórí-àṣeyọrí:** ìmúpadàbọ̀ **kì í ṣe** bí aago ṣe parí nìkan. Èsì tó dára
+máa ń dín iye ìkùnà àwòṣe náà kù ní ìpele kọ̀ọ̀kan, kí àwòṣe tó ti padà bọ̀ sípò
+láàárín àkókò náà lè dáwọ́ pípọ̀ sí i dúró (kí ó sì mú ìdènà kúrò) kí aago rẹ̀ tó parí. Lórí
+àfojúsùn àkójọpọ̀ tó ṣàṣeyọrí, `open-sse/services/combo.ts` máa ń pe `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), èyí tí ó máa ń **pín** `failureCount` tó wà ní ìpamọ́
+**sí ìdajì** (`Math.floor(failureCount / 2)`); nígbà tí ó bá dé `0`, a máa ń pa àkọsílẹ̀ ìdènà náà
+rẹ́ pátápátá. Ẹgbẹ́ kejì rẹ̀, `recordModelLockoutFailure()`,
+máa ń fi ọ̀kan kún iye náà (ó sì ń mú àkókò ìsinmi pọ̀ sí i) fún àwọn ìkùnà tó ṣẹlẹ̀ láàárín
+àkókò ìpòkè. Ìdínkù-lórí-àṣeyọrí yìí jẹ́ àfikún sí píparí aago lásán —
+èyíkéyìí nínú àwọn ọ̀nà méjèèjì lè tún àwòṣe kan ṣiṣẹ́.
 
-**Ipò:** àwọn ìdènà wà **nínú ìrántí** (`Map` ti ìlànà kọ̀ọ̀kan fún
-`ModelLockoutEntry` tí `provider:connectionId:model` jẹ́ kọ́kọ́rọ́ rẹ̀, àwọn ìdènà ìwọ̀n gan-an ní
+**Ipò:** a pa àwọn ìdènà mọ́ **nínú ìrántí** (àwọn `Map` ti ìlànà kọ̀ọ̀kan fún
+`ModelLockoutEntry` tí `provider:connectionId:model` jẹ́ kọ́kọ́rọ́ wọn, àwọn ìdènà ààlà-pàtó sì ní
 `provider:connectionId:exact:model`), a kò fi wọ́n pamọ́ sínú
-DB — wọ́n máa ń sọnù nígbà àtúnrẹ̀rẹ̀. A fi àwọn _ètò_ pamọ́; _ipò_ ìdènà tó ń ṣiṣẹ́
+DB — wọ́n máa ń sọnù nígbà ìtún-bẹ̀rẹ̀. Àwọn _ètò_ ni a fi pamọ́; _ipò_ ìdènà tó ń ṣiṣẹ́
 jẹ́ ti ìgbà díẹ̀.
 
 ---
 
-## 4. Ìṣàkóso Ìṣiṣẹ́pọ̀ Nípasẹ̀ Pínpín Ìpín (v3.8.36)
+## 4. Ìṣàkóso Ìṣiṣẹ́-Pọ̀ nípasẹ̀ Quota-Share (v3.8.36)
 
-Àwọn àkọọ́lẹ̀ ìforúkọsílẹ̀ (GLM, MiniMax, àti bẹ́ẹ̀ bẹ́ẹ̀ lọ) sábà máa ń gba kìkì
-ìbéèrè ~1–3 ní ìgbà kan náà; ríré kọjá ìyẹn máa ń fa 429 àti àkókò ìsinmi. Èyí le gan-an lábẹ́
-àwọn àkójọpọ̀ **quota-share** (`qtSd/…`), níbi tí ọ̀pọ̀ kọ́kọ́rọ́ API ti ń pín àkọọ́lẹ̀
-upstream kan náà. Ìpele mẹ́ta ló ń dáàbò bo àkọọ́lẹ̀ tí a pín kí ìbéèrè má bà á kún.
+Àwọn àkọọ́lẹ̀ ìforúkọsílẹ̀ (GLM, MiniMax, àti bẹ́ẹ̀ bẹ́ẹ̀ lọ) sábà máa ń gba kìkì ~1–3 ìbéèrè
+tó ń ṣiṣẹ́ pọ̀ lẹ́ẹ̀kan náà; fífi ju ìwọ̀n yẹn lọ máa ń fa 429 àti àkókò ìsinmi. Èyí le gan-an lábẹ́
+àwọn àkópọ̀ **quota-share** (`qtSd/…`), níbi tí ọ̀pọ̀ kọ́kọ́rọ́ API ti ń pín àkọọ́lẹ̀
+upstream kan náà. Ìpele mẹ́ta ló ń dáàbò bo àkọọ́lẹ̀ tí a pín kí ọ̀pọ̀ ìbéèrè má bàa bo ó mọ́lẹ̀.
 
-### Òpin ìṣiṣẹ́pọ̀ fún ìsopọ̀ kọ̀ọ̀kan (`max_concurrent`)
+### Òpin ìṣiṣẹ́-pọ̀ fún asopọ̀ kọ̀ọ̀kan (`max_concurrent`)
 
-Ìsopọ̀ olùpèsè kọ̀ọ̀kan lè ṣètò òpin `max_concurrent`
-(`provider_connections.max_concurrent`, tí a ṣètò nínú modal ìsopọ̀ / API / DB).
-Fi í sílẹ̀ ní òfo bí kò bá sí òpin. Èyí ni ìṣàkóso kan ṣoṣo tó ń darí ìpele ìtẹ̀léra
-ní ìsàlẹ̀ — ṣètò rẹ̀ sí iye ìṣiṣẹ́pọ̀ gidi ti àkọọ́lẹ̀ náà (fún àpẹẹrẹ GLM ~1, MiniMax ~2).
+Asopọ̀ olùpèsè kọ̀ọ̀kan lè ṣàlàyé òpin `max_concurrent`
+(`provider_connections.max_concurrent`, tí a ṣètò nínú modal asopọ̀ / API / DB).
+Fi sílẹ̀ ní òfo tí o kò bá fẹ́ òpin. Èyí ni ìṣàkóso kan ṣoṣo tó ń darí ìpele ìtẹ̀lé-lẹ́sẹẹsẹ
+ní ìsàlẹ̀ — ṣètò rẹ̀ sí ìwọ̀n ìṣiṣẹ́-pọ̀ gidi ti àkọọ́lẹ̀ náà (fún àpẹẹrẹ GLM ~1, MiniMax ~2).
 
-### Ìtẹ̀léra àwọn ìbéèrè quota-share
+### Àwọn òpin ìṣiṣẹ́-pọ̀ fún model kọ̀ọ̀kan (`modelConcurrency`)
 
-Nígbà tí ìfiranṣẹ́ quota-share bá ń tọ́ka sí ìsopọ̀ kan tó ní
-`max_concurrent` tó jẹ́ nọ́ńbà rere, àwọn ìbéèrè tó ń lọ ní ìgbà kan náà sí **àkọọ́lẹ̀** yẹn ni a máa tò lẹ́sẹẹsẹ nípasẹ̀
-semaphore kan fún ìsopọ̀ kọ̀ọ̀kan (kọ́kọ́rọ́ `qsconn:<connectionId>`): àwọn ìbéèrè tó pọ̀ ju **máa ń dúró nínú
-ìlà** dípò kí wọ́n kún àkọọ́lẹ̀ náà. Ó jẹ́ **ìkùnà-síṣí** — bí ìlà bá ti kún tàbí àkókò bá parí,
-yóò tẹ̀ síwájú láìgba àyè dípò kí ó kọ ìbéèrè tó ṣeé firánṣẹ́ láéláé.
-Tan tàbí pa á ní **Àwọn Ààtò → Ìfaradà → Ìṣiṣẹ́pọ̀ quota-share fún ìsopọ̀ kọ̀ọ̀kan**
-(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, ó máa ń wà ní títàn
-láti ìbẹ̀rẹ̀). Láìsí òpin `max_concurrent`, ìhùwàsí náà kò yí padà.
+Asopọ̀ kan tún lè ṣàlàyé àwọn òpin ìṣiṣẹ́-pọ̀ pàtó fún model kọ̀ọ̀kan
+ní inú àwòrán `rateLimitOverrides` rẹ̀:
 
-> Ẹnu-ọ̀nà ìtọ́sọ́nà quota-share (`selectQuotaShareTarget`, DRR + P2C) fúnra rẹ̀
-> jẹ́ ìkùnà-síṣí, ó sì kàn ń _dín ààyò_ ìsopọ̀ tó ti dé òpin kù — pẹ̀lú
-> àkójọpọ̀ ìsopọ̀ kan ṣoṣo, kò lè fi òpin líle mú un, nítorí náà semaphore yìí ni ohun tó ń
-> dá ìkúnwọ̀lé náà dúró ní ti gidi.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### Ìtúnṣe ìgbìyànjú tó mọ àkókò ìsinmi combo
+Ṣètò rẹ̀ nínú modal asopọ̀ (**Àwọn ìyípadà òpin oṣùwọ̀n → Àwọn òpin
+ìṣiṣẹ́-pọ̀ fún model kọ̀ọ̀kan**, `model=cap` kan fún ìlà kọ̀ọ̀kan) tàbí nípasẹ̀
+`PATCH /api/providers/[id]` pẹ̀lú ìrísí JSON kan náà. Ìtumọ̀ àwọn kọ́kọ́rọ́:
 
-Fún gbogbo ọgbọ́n combo (nígbà tí a bá mú un ṣiṣẹ́), ìbéèrè kan tí ì bá mú 429
-dájú nítorí àkókò ìsinmi kúkúrú tó jẹ́ ti ìgbà díẹ̀ máa ń dúró de òpin rẹ̀, yóò sì tún firánṣẹ́ dípò
-dídá 429 padà — èyí bo àwọn fèrèsé TPM/RPM irú Gemini (~60s retry-after)
-lórí combo ọ̀pọ̀ model, fún àpẹẹrẹ nígbà tí àwọn ibi-afẹ́ méjèèjì nínú combo model méjì bá dé òpin
-oṣùwọ̀n fún model kọ̀ọ̀kan. `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) ní **Àwọn Ààtò → Ìfaradà** ló fi ààlà sí i. Kò dúró fún `quota_exhausted`
-(títìpa títí di ọ̀gànjọ́ òru) tàbí àwọn ìdí ìfàṣẹsí/àìrí-nǹkan.
+- **Gbogbo asopọ̀ ní ìfiwéra pẹ̀lú model pàtó:** `maxConcurrent` ṣì jẹ́ òpin
+  gbogbo asopọ̀ tí a pín. Nígbà tí àwọn méjèèjì bá kan, a máa gba àwọn ẹnubodè méjèèjì
+  lẹ́ẹ̀kan náà nínú ẹnubodè àkópọ̀ kan náà
+  (`global → provider → account → model`); òpin tó le jù lára àwọn tó kan ni yóò
+  pinnu ìhùwàsí tó nípa.
+- **Ìbámu kọ́kọ́rọ́ model gangan:** kọ́kọ́rọ́ náà ni ọ̀rọ̀ model tí a fi ránṣẹ́ sí
+  executor lẹ́yìn tí routing bá ti yanjú — ní gbogbo ìgbà, ó jẹ́ id model upstream lásán
+  (`glm-5`), kì í ṣe alias `provider/model` ti ẹgbẹ́ oníbàárà (`zai/glm-5` kò
+  bá `glm-5` mu). Àwọn iye jẹ́ òpin ìbéèrè tó ń ṣiṣẹ́ pọ̀ tí ó jẹ́ odidi rere.
+- **Ìtòlẹ́sẹẹsẹ abẹ́nú, kò sí ìṣàwárí:** àwọn ìbéèrè tó kọjá òpin máa dúró ní ìtòlẹ́sẹẹsẹ abẹ́nú pẹ̀lú
+  ìlànà queue/timeout tó ti wà tẹ́lẹ̀ (àwọn àṣìṣe gbígbàwọlé tó ní irú `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute kì í ṣàwárí tàbí fojú díwọ̀n ìlànà upstream —
+  ó máa ń fipá mú àwọn òpin gangan tí olùṣàkóso ṣètò. Ẹnubodè model tó ti kún kì í
+  pa olùpèsè náà, bẹ́ẹ̀ ni kì í ṣẹ̀dá ìdènà model tó máa wà títí láé; ìhùwàsí
+  upstream 429/cooldown/fallback ṣì jẹ́ ààbò ìkẹyìn fún àṣìṣe.
+- **Ìwọ̀n fún asopọ̀ kọ̀ọ̀kan, fún process kọ̀ọ̀kan:** àwọn òpin wà fún asopọ̀ database
+  kọ̀ọ̀kan, a sì ń tọ́jú wọn sínú memory, nítorí náà asopọ̀ méjì tó ń tún kọ́kọ́rọ́ API upstream
+  kan náà lò kì í ṣètò ara wọn pọ̀.
+- **Àìṣètò túmọ̀ sí pé kò sí ìyípadà:** fífi àwòrán náà sílẹ̀ (tàbí fífi
+  ààyè dashboard sílẹ̀ ní òfo) kò fi ẹnubodè model kankan kún un. Àpẹẹrẹ àtòjọ láì
+  sọ pé òpin gbogbo-gbòò kan wà fún olùpèsè:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Ìtẹ̀lé-lẹ́sẹẹsẹ ìbéèrè Quota-share
+
+Nígbà tí dispatch quota-share kan bá dojú kọ asopọ̀ tó ṣàlàyé
+`max_concurrent` rere, àwọn ìbéèrè tó ń ṣiṣẹ́ pọ̀ sí **àkọọ́lẹ̀** yẹn ni a máa ṣètò ní tẹ̀lé-lẹ́sẹẹsẹ nípasẹ̀
+semaphore kan fún asopọ̀ kọ̀ọ̀kan (kọ́kọ́rọ́ `qsconn:<connectionId>`): àwọn ìbéèrè tó pọ̀ ju máa **dúró nínú
+queue** dípò kí wọ́n bo àkọọ́lẹ̀ náà mọ́lẹ̀. Ó jẹ́ **fail-open** — queue tó ti kún
+tàbí timeout máa tẹ̀síwájú láìgba slot dípò kí ó kọ ìbéèrè tí a lè dispatch
+nígbàkigbà. Tan-an tàbí pa á ní **Ètò → Ìfaradà → Ìṣiṣẹ́-pọ̀ fún asopọ̀ kọ̀ọ̀kan ti Quota-share**
+(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, ó máa ń wà ní titan
+láti ìbẹ̀rẹ̀). Láìsí òpin `max_concurrent`, ìhùwàsí náà kò ní yípadà.
+
+> Ẹnubodè routing quota-share (`selectQuotaShareTarget`, DRR + P2C) fúnra rẹ̀ jẹ́
+> fail-open, ó sì máa ń _dín ààyè àkọ́kọ́_ asopọ̀ tó ti dé òpin kù nìkan — pẹ̀lú
+> pool asopọ̀ kan ṣoṣo, kò lè fi òpin líle múlẹ̀, nítorí náà semaphore yìí gan-an
+> ló ń dá ìṣàn ìbéèrè tó pọ̀ dúró.
+
+### Àtúnṣe ìgbìyànjú combo tó mọ ipò cooldown
+
+Fún gbogbo ìlànà combo (nígbà tí a bá mú un ṣiṣẹ́), ìbéèrè kan tí ì bá sọ 429 di
+àbájáde fún cooldown alákòókò KÚKÚRÚ máa dúró kí ó parí, yóò sì tún dispatch dípò
+kí ó dá 429 padà — èyí bo àwọn àkókò TPM/RPM irú Gemini (~60s retry-after)
+lórí àwọn combo model púpọ̀, fún àpẹẹrẹ nígbà tí àwọn ibi-afẹ́ méjèèjì ti combo model méjì bá
+dé òpin oṣùwọ̀n fún model kọ̀ọ̀kan. `comboCooldownWait` ló fi ààlà sí i (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) ní **Ètò → Ìfaradà**. Kì í dúró lórí `quota_exhausted`
+(tí a ti tì pa títí di ọ̀gànjọ́ òru) tàbí àwọn ìdí auth/not-found.
 
 ---
 

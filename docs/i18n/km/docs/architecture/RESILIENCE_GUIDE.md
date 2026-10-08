@@ -206,113 +206,191 @@ window។ ធាតុកម្រិតការតភ្ជាប់ (`provide
 
 ## 3. ការចាក់សោម៉ូដែល
 
-**វិសាលភាព:** ត្រីធាតុ provider + connection + model។
+**វិសាលភាព:** ក្រុមបី provider + connection + model។
 
-**វិសាលភាព key តាម status:** status ដែលបរាជ័យកំណត់ថា ការចាក់សោត្រូវសរសេរទៅកាន់ key មួយណា
-(`resolveLockoutScope()` ក្នុង `open-sse/services/accountFallback/exactModelLock.ts`)៖
+**វិសាលភាព key តាម status:** status ដែលបរាជ័យជាអ្នកកំណត់ថា ការចាក់សោត្រូវសរសេរទៅកាន់ key មួយណា
+(`resolveLockoutScope()` ក្នុង `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — សញ្ញាអំពីកូតា ឬសិទ្ធិប្រើប្រាស់ — ចាក់សោ **គ្រួសារកូតា**៖
-  សម្រាប់ codex គឺវិសាលភាព `codex` / `spark` ទាំងមូល (រាល់ម៉ូដែល `gpt-5*` របស់
-  connection នោះ) ហើយសម្រាប់ provider ផ្សេងទៀតគឺ `getQuotaScopedModelForProvider()`។
-- `404` ចាក់សោតែម៉ូដែលដើម (`getModelLockKey()` បង្រួមវិសាលភាព `not_found`)។
-- status ផ្សេងទៀតណាមួយ — ការបរាជ័យផ្នែកដឹកជញ្ជូន/server ប្រភេទ `5xx` និង
-  `502` ដែល OmniRoute បង្កើតដោយខ្លួនឯងពីការផ្ទៀងផ្ទាត់គុណភាព — ចាក់សោតែត្រីធាតុ
-  provider/connection/model **ជាក់លាក់** ប៉ុណ្ណោះ។ stream មិនល្អលើម៉ូដែលមួយ
-  មិនមែនជាភស្តុតាងអំពីកូតារបស់គណនីទេ។ មុនពេលមានច្បាប់នេះ response ទទេមួយនៅលើ
-  `codex/gpt-5.6-luna` នឹងដករាល់ម៉ូដែល `gpt-5*` របស់ connection នោះចេញពី
-  routing រយៈពេល 2–30 នាទី (កើនឡើងជាបន្តបន្ទាប់) ទោះបីកូតារបស់វាមិនបានប៉ះពាល់ក៏ដោយ។
-- ជម្រើស `scope` ដែល caller បញ្ជាក់ច្បាស់លាស់ តែងតែមានអាទិភាព (Antigravity បញ្ជូន `"exact"`)។
+- `429` / `403` / `402` — សញ្ញាអំពីកូតា ឬសិទ្ធិប្រើប្រាស់ — ចាក់សោ **ក្រុមកូតា**៖
+  សម្រាប់ codex គឺវិសាលភាព `codex` / `spark` ទាំងមូល (គ្រប់ម៉ូដែល `gpt-5*` របស់
+  connection នោះ) ចំណែក provider ផ្សេងៗប្រើ `getQuotaScopedModelForProvider()`។
+- `404` ចាក់សោម៉ូដែលដើម (`getModelLockKey()` បង្រួមវិសាលភាព `not_found`)។
+- status ផ្សេងទៀតណាមួយ — ការបរាជ័យផ្នែក transport/server ប្រភេទ `5xx` និង
+  `502` ដែល OmniRoute បង្កើតដោយខ្លួនឯងពីការផ្ទៀងផ្ទាត់គុណភាព — ចាក់សោតែ
+  tuple provider/connection/model **ជាក់លាក់** ប៉ុណ្ណោះ។ stream ដែលមានបញ្ហាលើម៉ូដែលមួយ
+  មិនមែនជាភស្តុតាងអំពីកូតារបស់គណនីនោះទេ; មុនមានវិធាននេះ response ទទេមួយលើ
+  `codex/gpt-5.6-luna` បានដកម៉ូដែល `gpt-5*` ទាំងអស់របស់ connection នោះចេញពី
+  routing រយៈពេល 2–30 នាទី (កើនឡើងជាបន្តបន្ទាប់) ខណៈកូតារបស់វាមិនត្រូវបានប៉ះពាល់។
+- ជម្រើស `scope` ដែល caller កំណត់យ៉ាងច្បាស់ តែងតែមានអាទិភាព (Antigravity បញ្ជូន `"exact"`)។
 
-**គោលបំណង:** ជៀសវាងការបិទ connection ទាំងមូល នៅពេលមានតែម៉ូដែលមួយប៉ុណ្ណោះដែលមិនអាចប្រើបាន ឬត្រូវបានកំណត់ដោយកូតា។
+**គោលបំណង:** ជៀសវាងការបិទ connection ទាំងមូល នៅពេលមានតែម៉ូដែលមួយប៉ុណ្ណោះដែលមិនអាចប្រើបាន ឬត្រូវបានកម្រិតដោយកូតា។
 
 **ឧទាហរណ៍:**
 
-- provider ដែលមានកូតាតាមម៉ូដែល ហើយត្រឡប់ 429
-- provider មូលដ្ឋានដែលត្រឡប់ 404 សម្រាប់ម៉ូដែលដែលបាត់មួយ
-- ការបរាជ័យសិទ្ធិប្រើប្រាស់ mode/model ជាក់លាក់របស់ provider (ឧ. mode របស់ Grok)
+- provider ដែលកំណត់កូតាតាមម៉ូដែល ហើយត្រឡប់ 429
+- provider មូលដ្ឋានដែលត្រឡប់ 404 សម្រាប់ម៉ូដែលមួយដែលបាត់
+- ការបរាជ័យផ្នែកសិទ្ធិប្រើប្រាស់ mode/model ជាក់លាក់របស់ provider (ឧ. mode របស់ Grok)
 
 **ការអនុវត្ត:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`។
 
-### ផ្ទាំងគ្រប់គ្រងរយៈពេលផ្អាកម៉ូដែល (v3.8.0)
+### ផ្ទាំងគ្រប់គ្រង Model Cooldowns (v3.8.0)
 
 UI: Settings → Model Cooldowns (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-រាយបញ្ជីការចាក់សោដែលកំពុងសកម្មជាមួយ៖ provider, connection, model, reason, expiresAt។ ប្រតិបត្តិករអាចបើកម៉ូដែលឡើងវិញដោយដៃពី card នេះ។
+បង្ហាញបញ្ជីការចាក់សោដែលកំពុងសកម្ម ជាមួយ៖ provider, connection, model, reason, expiresAt។ ប្រតិបត្តិករអាចបើកម៉ូដែលឱ្យប្រើឡើងវិញដោយដៃពី card នេះ។
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — រាយបញ្ជីការចាក់សោដែលកំពុងសកម្ម
-- `DELETE /api/resilience/model-cooldowns` — បើកឡើងវិញដោយដៃ។ Body: `{provider, connection, model}`។ Auth: management។
+- `GET /api/resilience/model-cooldowns` — បង្ហាញបញ្ជីការចាក់សោដែលកំពុងសកម្ម
+- `DELETE /api/resilience/model-cooldowns` — បើកឱ្យប្រើឡើងវិញដោយដៃ។ Body: `{provider, connection, model}`។ Auth: management។
 
-### UI កំណត់ការចាក់សោ + ការស្ដារឡើងវិញតាមការថយចុះពេលជោគជ័យ (v3.8.23)
+### កម្មវិធីគ្រប់គ្រង Cooldown
 
-ការចាក់សោម៉ូដែលបានផ្លាស់ប្ដូរពីឥរិយាបថដែលបានកំណត់ជាប់ក្នុងកូដ និងបើកជានិច្ច
-ទៅជាមុខងារដែលអាចកំណត់រចនាសម្ព័ន្ធបានពេញលេញ ត្រូវបើកប្រើដោយជម្រើស និងមាន
-មធ្យោបាយស្ដារឡើងវិញដោយខ្លួនឯង។
+UI: Monitoring → Cooldown Manager (`src/app/(dashboard)/dashboard/resilience/cooldowns/`)។
 
-**card ការកំណត់:** Settings → Model Lockout
+ទំព័រតែមួយសម្រាប់គ្រប់ connection ដែលត្រូវបានដកចេញពី routing ដោយសារមូលហេតុបណ្ដោះអាសន្ន ជំនួសឱ្យ
+ការបើកទំព័រ provider នីមួយៗ។ វាបង្ហាញបញ្ជី cooldown របស់ connection, ការចាក់សោម៉ូដែល និង
+ស្ថានភាពចុងក្រោយ ហើយអាចសម្អាតពួកវាតាម connection, តាមជម្រើស ឬសម្រាប់ connection ទាំងអស់របស់ provider មួយ
+ព្រមទាំងកែសម្រួលវិធាន cooldown ដែលត្រូវបានកែតម្រូវញឹកញាប់បំផុត៖ `streamStallCooldown.enabled` និង
+cooldown មូលដ្ឋាន `connectionCooldown` របស់ OAuth / API-key ព្រមទាំងចំនួនជំហាន backoff អតិបរមា (រក្សាទុកតាមរយៈ
+`PATCH /api/resilience`)។ ស្ថានភាពចុងក្រោយ (`banned`, `expired`, `credits_exhausted`) ត្រូវបាន
+បង្ហាញក្នុងបញ្ជី ប៉ុន្តែមិនត្រូវបានសម្អាតនៅទីនេះឡើយ។
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, auth: management):
+
+- `GET /api/resilience/cooldowns[?provider=]` — connection ដែលមាន status, cooldown នៅសល់,
+  កម្រិត backoff, ប្រភេទ error ចុងក្រោយ និងការចាក់សោម៉ូដែល (គ្មាន credentials)
+- `POST /api/resilience/cooldowns` — body `{connectionIds: string[]}` ឬ
+  `{all: true, provider?}`; ត្រឡប់ `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI សម្រាប់ការកំណត់ការចាក់សោ + ការស្ដារឡើងវិញដោយបន្ថយតាមភាពជោគជ័យ (v3.8.23)
+
+ការចាក់សោម៉ូដែលបានផ្លាស់ប្ដូរពីឥរិយាបថដែលកំណត់រឹង និងបើកជានិច្ច ទៅជាមុខងារដែលអាចកំណត់រចនាសម្ព័ន្ធបានពេញលេញ
+និងតម្រូវឱ្យជ្រើសបើកប្រើ ដោយមាន card ការកំណត់ផ្ទាល់ខ្លួន និងផ្លូវស្ដារឡើងវិញដោយស្វ័យប្រវត្តិ។
+
+**Card ការកំណត់:** Settings → Model Lockout
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`)។
-វា **ខុសដាច់ដោយឡែក** ពី `ModelCooldownsCard` ដែលបានតែអានខាងលើ (ដែលគ្រាន់តែ
-_រាយបញ្ជី_ ការចាក់សោសកម្មប៉ុណ្ណោះ) — card ថ្មីនេះ _កំណត់រចនាសម្ព័ន្ធប៉ារ៉ាម៉ែត្រ_។ តម្លៃលំនាំដើម
+នេះគឺ **ដាច់ដោយឡែក** ពី `ModelCooldownsCard` សម្រាប់តែអានខាងលើ (ដែលគ្រាន់តែ
+_បង្ហាញបញ្ជី_ ការចាក់សោដែលកំពុងសកម្ម) — card ថ្មីនេះ _កំណត់រចនាសម្ព័ន្ធប៉ារ៉ាម៉ែត្រ_។ តម្លៃលំនាំដើម
 ស្ថិតនៅក្នុង `DEFAULT_MODEL_LOCKOUT_SETTINGS`
-(`src/lib/resilience/modelLockoutSettings.ts`)៖
+(`src/lib/resilience/modelLockoutSettings.ts`):
 
-| ការកំណត់                | លំនាំដើម                         | អត្ថន័យ                                                             |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------- |
-| `enabled`               | `false`                          | ប៊ូតុងបិទបើកមេ — ការចាក់សោម៉ូដែលគឺ **បិទតាមលំនាំដើម**។              |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | status ពី upstream ដែលត្រូវរាប់ជាការបរាជ័យមានវិសាលភាពត្រឹមម៉ូដែល។   |
-| `baseCooldownMs`        | `120_000` (120 វិនាទី)           | រយៈពេលចាក់សោដំបូងសម្រាប់ការបរាជ័យលើកទីមួយ។                          |
-| `maxCooldownMs`         | `1_800_000` (30 នាទី)            | ដែនកំណត់អតិបរមាសម្រាប់រយៈពេលផ្អាកដែលបានបង្កើន។                      |
-| `maxBackoffSteps`       | `10`                             | ចំនួនជំហានអតិបរមានៃការបង្កើន exponential-backoff។                   |
-| `useExponentialBackoff` | `true`                           | ថាតើការបរាជ័យដដែលៗត្រូវបង្កើនរយៈពេលផ្អាកតាមបែបអិចស្ប៉ូណង់ស្យែលឬអត់។ |
+| ការកំណត់                | តម្លៃលំនាំដើម                    | អត្ថន័យ                                                           |
+| ----------------------- | -------------------------------- | ----------------------------------------------------------------- |
+| `enabled`               | `false`                          | កុងតាក់មេ — ការចាក់សោម៉ូដែលគឺ **បិទតាមលំនាំដើម**។                 |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | status ពី upstream ដែលត្រូវបានរាប់ជាការបរាជ័យក្នុងវិសាលភាពម៉ូដែល។ |
+| `baseCooldownMs`        | `120_000` (120 វិនាទី)           | រយៈពេលចាក់សោដំបូងសម្រាប់ការបរាជ័យលើកទីមួយ។                        |
+| `maxCooldownMs`         | `1_800_000` (30 នាទី)            | ដែនកំណត់ខ្ពស់បំផុតសម្រាប់ cooldown ដែលកើនឡើងជាបន្តបន្ទាប់។        |
+| `maxBackoffSteps`       | `10`                             | ចំនួនជំហានអតិបរមានៃការបង្កើន exponential-backoff។                 |
+| `useExponentialBackoff` | `true`                           | ថាតើការបរាជ័យដដែលៗបង្កើន cooldown តាមអិចស្ប៉ូណង់ស្យែលឬអត់។        |
 
-ការកំណត់ត្រូវបានរក្សាទុកតាម settings store ធម្មតា និងផ្ទៀងផ្ទាត់តាម
-resilience settings schema។ card នេះកំណត់ព្រំដែន `baseCooldownMs`/`maxCooldownMs`
-(ដោយ `maxCooldownMs ≥ baseCooldownMs`) និង `maxBackoffSteps`។
+ការកំណត់ត្រូវបានរក្សាទុកតាមរយៈ settings store ធម្មតា និងត្រូវបានផ្ទៀងផ្ទាត់តាម
+schema ការកំណត់ resilience; card នេះកំណត់ព្រំដែន `baseCooldownMs`/`maxCooldownMs`
+(ដោយមាន `maxCooldownMs ≥ baseCooldownMs`) និង `maxBackoffSteps`។
 
-**ការស្ដារឡើងវិញតាមការថយចុះពេលជោគជ័យ:** ការស្ដារឡើងវិញ **មិនមែន** អាស្រ័យតែលើ timer ផុតកំណត់ទេ។ response
-ដែលមានសុខភាពល្អ នឹងបន្ថយចំនួនការបរាជ័យរបស់ម៉ូដែលជាបណ្ដើរៗ ដូច្នេះម៉ូដែលដែលបានស្ដារឡើងវិញ
-នៅពាក់កណ្ដាលរយៈពេលនឹងឈប់កើនកម្រិត (ហើយត្រូវបានសម្អាត) មុនពេល timer របស់វាផុតកំណត់។ នៅពេល combo target
-ជោគជ័យ `open-sse/services/combo.ts` ហៅ `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`) ដែល **ចែកពាក់កណ្ដាល** `failureCount`
-ដែលបានរក្សាទុក (`Math.floor(failureCount / 2)`)។ នៅពេលវាឈានដល់ `0` entry នៃការចាក់សោ
-ត្រូវបានលុបចេញទាំងស្រុង។ `recordModelLockoutFailure()` ដែលជាគូរបស់វា
-បង្កើនចំនួន (និងបង្កើនរយៈពេលផ្អាក) នៅពេលមានការបរាជ័យក្នុងរយៈពេល
-បង្កើនកម្រិត។ ការថយចុះពេលជោគជ័យនេះ គឺបន្ថែមលើ timer ផុតកំណត់ធម្មតា —
-មធ្យោបាយណាមួយក៏អាចបើកម៉ូដែលឡើងវិញបានដែរ។
+**ការស្ដារឡើងវិញដោយបន្ថយតាមភាពជោគជ័យ:** ការស្ដារឡើងវិញ **មិនមែន** ពឹងផ្អែកតែលើការផុតកំណត់របស់ timer ទេ។ response
+ដែលមានសុខភាពល្អ នឹងបន្ថយចំនួនការបរាជ័យរបស់ម៉ូដែលជាជំហានៗ ដូច្នេះម៉ូដែលដែលបានស្ដារឡើងវិញ
+នៅកណ្ដាលចន្លោះពេលនឹងឈប់កើនកម្រិត (និងត្រូវបានសម្អាត) មុន timer របស់វាផុតកំណត់។ នៅពេល combo target ទទួលបានជោគជ័យ
+`open-sse/services/combo.ts` ហៅ `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`) ដែល **កាត់ពាក់កណ្ដាល** `failureCount` ដែលបានរក្សាទុក
+(`Math.floor(failureCount / 2)`); នៅពេលវាឈានដល់ `0` entry នៃការចាក់សោ
+ត្រូវបានលុបចេញទាំងស្រុង។ មុខងារដែលធ្វើការផ្ទុយគ្នា `recordModelLockoutFailure()`
+បង្កើនចំនួន (និងបង្កើន cooldown) នៅពេលមានការបរាជ័យក្នុង
+ចន្លោះពេល escalation។ ការបន្ថយតាមភាពជោគជ័យនេះ គឺជាការបន្ថែមលើការផុតកំណត់ធម្មតារបស់ timer —
+ផ្លូវណាមួយក្នុងចំណោមទាំងពីរអាចបើកម៉ូដែលឱ្យប្រើឡើងវិញបាន។
 
 **ស្ថានភាព:** ការចាក់សោត្រូវបានរក្សាទុក **ក្នុង memory** (`Map` តាម process នីមួយៗនៃ
-`ModelLockoutEntry` ដែលមាន key ជា `provider:connectionId:model` និងការចាក់សោ exact-scope មាន key ជា
-`provider:connectionId:exact:model`) មិនត្រូវបានរក្សាទុកជាប់ក្នុង
-DB ទេ — វានឹងបាត់បង់នៅពេល restart។ _ការកំណត់_ ត្រូវបានរក្សាទុកជាប់ ប៉ុន្តែ
-_ស្ថានភាព_ ការចាក់សោសកម្មគឺបណ្ដោះអាសន្ន។
+`ModelLockoutEntry` ដែលប្រើ `provider:connectionId:model` ជា key និងការចាក់សោក្នុងវិសាលភាពជាក់លាក់ដោយប្រើ
+`provider:connectionId:exact:model`) មិនត្រូវបានរក្សាទុកក្នុង
+DB ទេ — ពួកវានឹងបាត់បង់នៅពេល restart។ _ការកំណត់_ ត្រូវបានរក្សាទុក; _ស្ថានភាព_ នៃការចាក់សោដែលកំពុងសកម្ម
+គឺបណ្ដោះអាសន្ន។
 
 ---
 
-## 4. ការគ្រប់គ្រងសំណើស្របពេលគ្នាសម្រាប់ Quota-Share (v3.8.36)
+## 4. ការគ្រប់គ្រងសំណើព្រមគ្នាសម្រាប់ Quota-Share (v3.8.36)
 
-គណនីដែលមានការជាវ (GLM, MiniMax ជាដើម) ជាញឹកញាប់ទទួលយកសំណើស្របពេលគ្នាបានត្រឹមតែ ~1–3 ប៉ុណ្ណោះ។ ការលើសចំនួននេះនឹងបង្កឱ្យមាន 429 និងរយៈពេលផ្អាក។ បញ្ហានេះមានលក្ខណៈធ្ងន់ធ្ងរជាពិសេសនៅក្រោមបន្សំ **quota-share** (`qtSd/…`) ដែល API key ជាច្រើនចែករំលែកគណនី upstream តែមួយ។ មានយន្តការបីស្រទាប់ដើម្បីការពារកុំឱ្យគណនីរួមមួយទទួលសំណើលើសលប់។
+គណនីជាវប្រចាំ (GLM, MiniMax ជាដើម) ជាញឹកញាប់ទទួលយកតែសំណើព្រមគ្នាប្រហែល ~1–3 ប៉ុណ្ណោះ;
+ការលើសពីនេះនឹងបង្កឱ្យមាន 429 និងរយៈពេល cooldown។ បញ្ហានេះធ្ងន់ធ្ងរជាពិសេសនៅក្រោម
+បន្សំ **quota-share** (`qtSd/…`) ដែល API key ជាច្រើនចែករំលែកគណនី upstream
+តែមួយ។ ស្រទាប់បីការពារគណនីរួមមិនឱ្យរងសំណើច្រើនហួសកម្រិត។
 
-### កម្រិតសំណើស្របពេលគ្នាតាមការតភ្ជាប់ (`max_concurrent`)
+### កម្រិតសំណើព្រមគ្នាក្នុងមួយ connection (`max_concurrent`)
 
-ការតភ្ជាប់ provider នីមួយៗអាចកំណត់ពិដាន `max_concurrent`
-(`provider_connections.max_concurrent` ដែលកំណត់ក្នុងម៉ូឌុលការតភ្ជាប់ / API / DB)។
-ទុកវាឱ្យទទេ ប្រសិនបើមិនចង់កំណត់ដែនកំណត់។ នេះគឺជាការកំណត់តែមួយគត់ដែលគ្រប់គ្រងស្រទាប់រៀបសំណើជាលំដាប់ខាងក្រោម — កំណត់វាទៅតាមចំនួនសំណើស្របពេលគ្នាពិតប្រាកដរបស់គណនី (ឧ. GLM ~1, MiniMax ~2)។
+Provider connection នីមួយៗអាចប្រកាសកម្រិតអតិបរមា `max_concurrent`
+(`provider_connections.max_concurrent` ដែលកំណត់ក្នុង connection modal / API / DB)។
+ទុកវាឱ្យទទេ ប្រសិនបើមិនចង់កំណត់កម្រិត។ នេះគឺជាការកំណត់តែមួយដែលជំរុញស្រទាប់
+serialization ខាងក្រោម — កំណត់វាទៅតាមចំនួនសំណើព្រមគ្នាពិតប្រាកដរបស់គណនី (ឧ. GLM ~1, MiniMax ~2)។
 
-### ការរៀបសំណើ quota-share ជាលំដាប់
+### កម្រិតសំណើព្រមគ្នាក្នុងមួយ model (`modelConcurrency`)
 
-នៅពេលការបញ្ជូន quota-share កំណត់គោលដៅទៅការតភ្ជាប់ដែលបានប្រកាសតម្លៃវិជ្ជមានសម្រាប់ `max_concurrent` សំណើស្របពេលគ្នាទៅកាន់ **គណនី** នោះនឹងត្រូវបានរៀបចំជាលំដាប់តាមរយៈ semaphore សម្រាប់ការតភ្ជាប់នីមួយៗ (key `qsconn:<connectionId>`)៖ សំណើដែលលើសនឹង **រង់ចាំក្នុងជួរ** ជំនួសឱ្យការបញ្ជូនសំណើលើសលប់ទៅគណនី។ វាជាប្រភេទ **fail-open** — ជួរដែលពេញ ឬការអស់ពេលកំណត់ នឹងបន្តដំណើរការដោយគ្មាន slot ជំនួសឱ្យការបដិសេធសំណើដែលអាចបញ្ជូនបាន។ បិទ/បើកវានៅក្នុង **Settings → Resilience → Quota-share per-connection concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled` ដែលបានបើកតាមលំនាំដើម)។ បើគ្មានពិដាន `max_concurrent` ឥរិយាបថនឹងមិនផ្លាស់ប្តូរទេ។
+Connection មួយក៏អាចប្រកាសកម្រិតអតិបរមាជាក់លាក់នៃសំណើព្រមគ្នាក្នុងមួយ model
+នៅក្នុង map `rateLimitOverrides` របស់វា៖
 
-> ច្រកគ្រប់គ្រងការកំណត់ផ្លូវ quota-share (`selectQuotaShareTarget`, DRR + P2C) ខ្លួនវាក៏ជា
-> fail-open ហើយគ្រាន់តែ _បន្ថយអាទិភាព_ នៃការតភ្ជាប់ដែលដល់ពិដានប៉ុណ្ណោះ — ជាមួយនឹង
-> pool ដែលមានការតភ្ជាប់តែមួយ វាមិនអាចដាក់ដែនកំណត់តឹងរ៉ឹងបានទេ ដូច្នេះ semaphore នេះគឺជាអ្វីដែលពិតជាទប់ស្កាត់
-> ការហូរចូលនៃសំណើលើសលប់។
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### ការព្យាយាមឡើងវិញដោយគិតគូរពី cooldown របស់ combo
+កំណត់វាក្នុង connection modal (**Rate limit overrides → កម្រិតសំណើ
+ព្រមគ្នាក្នុងមួយ model** ដោយដាក់ `model=cap` មួយក្នុងមួយបន្ទាត់) ឬតាមរយៈ
+`PATCH /api/providers/[id]` ជាមួយទម្រង់ JSON ដូចគ្នា។ អត្ថន័យសំខាន់ៗ៖
 
-សម្រាប់យុទ្ធសាស្ត្រ combo ទាំងអស់ (នៅពេលបានបើក) សំណើដែលនឹងធ្វើឱ្យកើត 429 ដោយសារ cooldown បណ្ដោះអាសន្នរយៈពេលខ្លី នឹងរង់ចាំរហូតដល់វាផុត ហើយបញ្ជូនឡើងវិញ ជំនួសឱ្យការត្រឡប់ 429 — វាគ្របដណ្តប់លើចន្លោះពេល TPM/RPM ថ្នាក់ Gemini (~60s retry-after) នៅលើ combo ពហុម៉ូដែល ឧ. គោលដៅទាំងពីរនៃ combo ដែលមាន 2 ម៉ូដែល ប៉ះដែនកំណត់អត្រាសម្រាប់ម៉ូដែលនីមួយៗ។ វាត្រូវបានកំណត់ព្រំដែនដោយ `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) ក្នុង **Settings → Resilience**។ វាមិនរង់ចាំលើ `quota_exhausted`
-(ចាក់សោរហូតដល់ពាក់កណ្ដាលអធ្រាត្រ) ឬមូលហេតុពាក់ព័ន្ធនឹងការផ្ទៀងផ្ទាត់អត្តសញ្ញាណ/រកមិនឃើញទេ។
+- **កម្រិតសម្រាប់ connection ទាំងមូល និងកម្រិតជាក់លាក់តាម model:** `maxConcurrent` នៅតែជា
+  កម្រិតរួមសម្រាប់ connection ទាំងមូល។ នៅពេលទាំងពីរត្រូវបានអនុវត្ត gate ទាំងពីរត្រូវបានទទួលយក
+  ដោយអាតូមិកនៅក្នុង composite gate តែមួយ
+  (`global → provider → account → model`); ឥរិយាបថជាក់ស្តែងនឹងអនុវត្តតាម
+  កម្រិតដែលតឹងរ៉ឹងជាង។
+- **ការផ្គូផ្គង model key ឱ្យត្រូវគ្នាទាំងស្រុង:** key គឺជា model string ដែលបញ្ជូនទៅ
+  executor បន្ទាប់ពីដោះស្រាយ routing រួច — ជាធម្មតាគឺ upstream model id ដាច់ដោយឡែក
+  (`glm-5`) មិនមែន alias `provider/model` ខាង client (`zai/glm-5` មិន
+  ផ្គូផ្គងនឹង `glm-5` ទេ)។ តម្លៃត្រូវជាចំនួនគត់វិជ្ជមានដែលជាកម្រិតអតិបរមានៃសំណើព្រមគ្នា។
+- **ការតម្រង់ជួរក្នុងមូលដ្ឋាន ដោយគ្មានការរុករកដោយស្វ័យប្រវត្តិ:** សំណើលើសកម្រិតនឹងរង់ចាំក្នុងជួរមូលដ្ឋានដោយប្រើ
+  អត្ថន័យ queue/timeout ដែលមានស្រាប់ (កំហុស admission មានប្រភេទ `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`)។ OmniRoute មិនរុករក ឬសន្និដ្ឋានគោលការណ៍របស់ upstream ទេ —
+  វាអនុវត្តកម្រិតជាក់លាក់ដែលប្រតិបត្តិករបានកំណត់។ Model gate ដែលពេញសមត្ថភាពនឹងមិនបិទ
+  provider ហើយក៏មិនបង្កើតការចាក់សោ model ជាអចិន្ត្រៃយ៍ដែរ; ឥរិយាបថ 429/cooldown/fallback
+  របស់ upstream នៅតែជាយន្តការបម្រុងសម្រាប់កំហុស។
+- **វិសាលភាពក្នុងមួយ connection និងក្នុងមួយ process:** កម្រិតទាំងនេះអនុវត្តក្នុងមួយ database connection
+  និងត្រូវបានរក្សាទុកក្នុង memory ដូច្នេះ connection ពីរដែលប្រើ upstream API key
+  ដូចគ្នាឡើងវិញ នឹងមិនសម្របសម្រួលគ្នាទេ។
+- **មិនបានកំណត់ មានន័យថាមិនផ្លាស់ប្តូរ:** ការមិនបញ្ចូល map (ឬទុក field ក្នុង
+  dashboard ឱ្យទទេ) នឹងមិនបន្ថែម model gate ទេ។ ឧទាហរណ៍នៃការកំណត់ដោយមិន
+  អះអាងពីកម្រិតសកលរបស់ provider ណាមួយ៖
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### ការធ្វើ serialization សំណើ Quota-share
+
+នៅពេល quota-share dispatch ផ្ញើទៅ connection ដែលប្រកាស
+`max_concurrent` វិជ្ជមាន សំណើព្រមគ្នាទៅកាន់ **account** នោះត្រូវបានធ្វើ serialization តាមរយៈ
+semaphore ក្នុងមួយ connection (key `qsconn:<connectionId>`): សំណើលើសកម្រិតនឹង **រង់ចាំក្នុង
+ជួរ** ជំនួសឱ្យការបញ្ជូនសំណើច្រើនហួសកម្រិតទៅគណនី។ វាជា **fail-open** — queue ដែលពេញ
+ឬ timeout នឹងបន្តដំណើរការដោយគ្មាន slot ជំនួសឱ្យការបដិសេធសំណើ
+ដែលអាច dispatch បាន។ បើកឬបិទនៅ **Settings → Resilience → Quota-share per-connection
+concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, បើកតាម
+លំនាំដើម)។ បើគ្មានកម្រិត `max_concurrent` ឥរិយាបថនឹងមិនផ្លាស់ប្តូរទេ។
+
+> Quota-share routing gate (`selectQuotaShareTarget`, DRR + P2C) ខ្លួនវាផ្ទាល់គឺ
+> fail-open ហើយគ្រាន់តែ _បន្ថយអាទិភាព_ របស់ connection ដែលដល់កម្រិតប៉ុណ្ណោះ — ជាមួយ
+> pool ដែលមាន connection តែមួយ វាមិនអាចដាក់កម្រិតជាដាច់ខាតបានទេ ដូច្នេះ semaphore នេះហើយដែល
+> ទប់ស្កាត់លំហូរសំណើច្រើនហួសកម្រិតបានជាក់ស្តែង។
+
+### ការព្យាយាមឡើងវិញដោយគិតពី combo cooldown
+
+សម្រាប់ combo strategy នីមួយៗ (នៅពេលបានបើក) សំណើដែលនឹងធ្វើឱ្យកើត 429
+ដោយសាររយៈពេល cooldown បណ្តោះអាសន្នខ្លី នឹងរង់ចាំរហូតដល់វាផុត ហើយ re-dispatch
+ជំនួសឱ្យការត្រឡប់ 429 — វាគ្របដណ្តប់លើចន្លោះពេល TPM/RPM កម្រិត Gemini (~60s retry-after)
+នៅលើ combo ដែលមាន model ច្រើន ឧ. target ទាំងពីររបស់ combo ដែលមាន 2 model
+ប៉ះកម្រិតអត្រាក្នុងមួយ model។ វាត្រូវបានកម្រិតដោយ `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) ក្នុង **Settings → Resilience**។ វាមិនដែលរង់ចាំលើ `quota_exhausted`
+(ចាក់សោរហូតដល់ពាក់កណ្តាលអធ្រាត្រ) ឬមូលហេតុ auth/not-found ទេ។
 
 ---
 

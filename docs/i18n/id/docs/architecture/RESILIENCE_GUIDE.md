@@ -208,19 +208,19 @@ Mekanisme terkait tetap terpisah:
 
 **Cakupan:** kombinasi penyedia + koneksi + model.
 
-**Cakupan kunci berdasarkan status:** status kegagalan menentukan kunci tempat penguncian ditulis
+**Cakupan kunci berdasarkan status:** status kegagalan menentukan kunci yang menjadi target penulisan penguncian
 (`resolveLockoutScope()` di `open-sse/services/accountFallback/exactModelLock.ts`):
 
 - `429` / `403` / `402` — sinyal kuota atau hak akses — mengunci **keluarga kuota**:
   untuk codex, seluruh cakupan `codex` / `spark` (setiap model `gpt-5*` dari
-  koneksi tersebut), sedangkan untuk penyedia lain menggunakan `getQuotaScopedModelForProvider()`.
-- `404` mengunci model dasarnya (`getModelLockKey()` mempersempit `not_found`).
-- Status lainnya — kegagalan transportasi/server `5xx` dan `502` buatan
-  OmniRoute sendiri dari validasi kualitas — hanya mengunci tuple **persis**
-  penyedia/koneksi/model. Stream yang buruk pada satu model bukanlah bukti
-  adanya masalah pada kuota akun; sebelum aturan ini, satu respons kosong pada
+  koneksi tersebut), untuk penyedia lain menggunakan `getQuotaScopedModelForProvider()`.
+- `404` mengunci model saja (`getModelLockKey()` mempersempit `not_found`).
+- Status lainnya — kegagalan transportasi/server `5xx` dan `502` hasil sintesis
+  OmniRoute sendiri dari validasi kualitas — hanya mengunci kombinasi **persis**
+  penyedia/koneksi/model. Stream yang bermasalah pada satu model bukanlah bukti
+  mengenai kuota akun; sebelum aturan ini, satu respons kosong pada
   `codex/gpt-5.6-luna` menghapus setiap model `gpt-5*` dari koneksi tersebut dari
-  perutean selama 2–30 menit (meningkat secara bertahap), padahal kuotanya tidak terpengaruh.
+  perutean selama 2–30 menit (meningkat secara bertahap), meskipun kuotanya tidak terpengaruh.
 - Opsi `scope` eksplisit dari pemanggil selalu diprioritaskan (Antigravity meneruskan `"exact"`).
 
 **Tujuan:** menghindari penonaktifan seluruh koneksi ketika hanya satu model yang tidak tersedia atau dibatasi kuota.
@@ -237,97 +237,161 @@ Mekanisme terkait tetap terpisah:
 
 UI: Pengaturan → Cooldown Model (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Menampilkan daftar penguncian aktif beserta: penyedia, koneksi, model, alasan, expiresAt. Operator dapat mengaktifkan kembali model secara manual dari kartu tersebut.
+Mencantumkan penguncian aktif beserta: penyedia, koneksi, model, alasan, expiresAt. Operator dapat mengaktifkan kembali model secara manual dari kartu tersebut.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — menampilkan daftar penguncian aktif
-- `DELETE /api/resilience/model-cooldowns` — mengaktifkan kembali secara manual. Body: `{provider, connection, model}`. Autentikasi: management.
+- `GET /api/resilience/model-cooldowns` — mencantumkan penguncian aktif
+- `DELETE /api/resilience/model-cooldowns` — mengaktifkan kembali secara manual. Body: `{provider, connection, model}`. Autentikasi: manajemen.
 
-### UI pengaturan penguncian + pemulihan berbasis penurunan saat berhasil (v3.8.23)
+### Pengelola Cooldown
 
-Penguncian model berubah dari perilaku bawaan yang selalu aktif menjadi fitur
-opsional yang sepenuhnya dapat dikonfigurasi, dengan kartu pengaturannya sendiri
-dan jalur pemulihan mandiri.
+UI: Pemantauan → Pengelola Cooldown (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Satu halaman untuk setiap koneksi yang dikeluarkan dari perutean karena alasan sementara, sehingga
+tidak perlu membuka setiap halaman penyedia. Halaman ini mencantumkan cooldown koneksi, penguncian model, dan status
+terminal; menghapusnya per koneksi, untuk koneksi yang dipilih, atau untuk semua koneksi dari suatu penyedia;
+serta mengedit aturan cooldown yang paling sering disesuaikan: `streamStallCooldown.enabled` dan cooldown dasar
+`connectionCooldown` OAuth / kunci API beserta jumlah maksimum langkah backoff (disimpan melalui
+`PATCH /api/resilience`). Status terminal (`banned`, `expired`, `credits_exhausted`) dicantumkan,
+tetapi tidak pernah dihapus di sini.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autentikasi: manajemen):
+
+- `GET /api/resilience/cooldowns[?provider=]` — koneksi beserta status, sisa cooldown,
+  tingkat backoff, jenis kesalahan terakhir, dan penguncian model (tanpa kredensial)
+- `POST /api/resilience/cooldowns` — body `{connectionIds: string[]}` atau
+  `{all: true, provider?}`; mengembalikan `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI pengaturan penguncian + pemulihan berbasis pengurangan saat berhasil (v3.8.23)
+
+Penguncian model berubah dari perilaku bawaan yang selalu aktif menjadi fitur opsional
+yang sepenuhnya dapat dikonfigurasi, dengan kartu pengaturannya sendiri dan mekanisme pemulihan mandiri.
 
 **Kartu pengaturan:** Pengaturan → Penguncian Model
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Kartu ini **berbeda** dari `ModelCooldownsCard` hanya-baca di atas (yang hanya
-_menampilkan_ penguncian aktif) — kartu baru tersebut _mengonfigurasi parameter_. Nilai default
+Kartu ini **berbeda** dari `ModelCooldownsCard` baca-saja di atas (yang hanya
+_mencantumkan_ penguncian aktif) — kartu baru ini _mengonfigurasi parameter_. Nilai bawaan
 berada di `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Pengaturan              | Default                          | Arti                                                                 |
+| Pengaturan              | Bawaan                           | Arti                                                                 |
 | ----------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Sakelar utama — penguncian model **nonaktif secara default**.        |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status upstream yang dihitung sebagai kegagalan tingkat model.       |
+| `enabled`               | `false`                          | Tombol utama — penguncian model **nonaktif secara bawaan**.          |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status upstream yang dihitung sebagai kegagalan lingkup model.       |
 | `baseCooldownMs`        | `120_000` (120 dtk)              | Durasi penguncian awal untuk kegagalan pertama.                      |
-| `maxCooldownMs`         | `1_800_000` (30 mnt)             | Batas cooldown yang telah ditingkatkan.                              |
+| `maxCooldownMs`         | `1_800_000` (30 mnt)             | Batas atas cooldown yang telah ditingkatkan.                         |
 | `maxBackoffSteps`       | `10`                             | Jumlah maksimum langkah peningkatan backoff eksponensial.            |
 | `useExponentialBackoff` | `true`                           | Apakah kegagalan berulang meningkatkan cooldown secara eksponensial. |
 
-Pengaturan disimpan melalui penyimpanan pengaturan biasa dan divalidasi melalui
+Pengaturan dipertahankan melalui penyimpanan pengaturan normal dan divalidasi melalui
 skema pengaturan ketahanan; kartu tersebut membatasi `baseCooldownMs`/`maxCooldownMs`
 (dengan `maxCooldownMs ≥ baseCooldownMs`) dan `maxBackoffSteps`.
 
-**Pemulihan berbasis penurunan saat berhasil:** pemulihan **tidak** hanya bergantung pada berakhirnya timer. Respons
-yang sehat menurunkan kembali jumlah kegagalan model sehingga model yang pulih
-di tengah periode berhenti mengalami peningkatan (dan pengunciannya dihapus) sebelum timernya berakhir. Pada target
-kombinasi yang berhasil, `open-sse/services/combo.ts` memanggil `decayModelFailureCount()`
+**Pemulihan berbasis pengurangan saat berhasil:** pemulihan **tidak** semata-mata bergantung pada berakhirnya timer. Respons yang sehat
+mengurangi jumlah kegagalan model secara bertahap sehingga model yang pulih
+di tengah periode tidak terus mengalami peningkatan (dan pengunciannya dihapus) sebelum timer berakhir. Ketika target
+kombinasi berhasil, `open-sse/services/combo.ts` memanggil `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), yang **membagi dua** nilai
-`failureCount` yang tersimpan (`Math.floor(failureCount / 2)`); ketika nilainya mencapai `0`, entri penguncian
+`failureCount` yang tersimpan (`Math.floor(failureCount / 2)`); ketika mencapai `0`, entri penguncian
 dihapus sepenuhnya. Pasangannya, `recordModelLockoutFailure()`,
-menaikkan jumlah tersebut (dan meningkatkan cooldown) ketika terjadi kegagalan dalam
-periode eskalasi. Penurunan saat berhasil ini merupakan tambahan terhadap berakhirnya timer biasa —
-kedua jalur tersebut dapat mengaktifkan kembali suatu model.
+meningkatkan hitungan (dan meningkatkan cooldown) saat terjadi kegagalan dalam
+periode peningkatan. Pengurangan saat berhasil ini berfungsi sebagai tambahan dari berakhirnya timer biasa —
+keduanya dapat mengaktifkan kembali model.
 
 **Status:** penguncian disimpan **dalam memori** (`Map` per proses yang berisi
-`ModelLockoutEntry` dengan kunci `provider:connectionId:model`, sedangkan penguncian cakupan persis menggunakan
-`provider:connectionId:exact:model`), dan tidak disimpan secara persisten ke
-DB — data tersebut hilang saat proses dimulai ulang. _Pengaturan_ disimpan secara persisten; _status_
-penguncian aktif bersifat sementara.
+`ModelLockoutEntry` dengan kunci `provider:connectionId:model`, penguncian cakupan persis dengan kunci
+`provider:connectionId:exact:model`), tidak dipertahankan ke
+DB — data ini hilang saat proses dimulai ulang. _Pengaturan_ dipertahankan; _status_ penguncian aktif
+bersifat sementara.
 
 ---
 
 ## 4. Kontrol Konkurensi Quota-Share (v3.8.36)
 
 Akun langganan (GLM, MiniMax, dll.) sering kali hanya menerima ~1–3 permintaan
-konkuren; melampaui batas tersebut akan memicu 429 dan cooldown. Masalah ini sangat terasa pada
-kombinasi **quota-share** (`qtSd/…`), ketika beberapa kunci API berbagi satu akun
+secara bersamaan; jika batas tersebut terlampaui, hal ini memicu respons 429 dan cooldown. Kondisi ini sangat terasa pada
+kombo **quota-share** (`qtSd/…`), ketika beberapa kunci API berbagi satu akun
 upstream. Tiga lapisan mencegah akun bersama dibanjiri permintaan.
 
 ### Batas konkurensi per koneksi (`max_concurrent`)
 
 Setiap koneksi penyedia dapat mendeklarasikan batas maksimum `max_concurrent`
-(`provider_connections.max_concurrent`, diatur di modal koneksi / API / DB).
-Biarkan kosong agar tidak ada batas. Ini adalah satu-satunya pengaturan yang mengendalikan lapisan
-serialisasi di bawah — atur sesuai konkurensi aktual akun (misalnya GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`, yang ditetapkan melalui modal koneksi / API / DB).
+Biarkan kosong jika tidak ingin menetapkan batas. Ini adalah satu-satunya pengaturan yang mengendalikan lapisan serialisasi
+di bawah ini — atur sesuai konkurensi aktual akun (misalnya GLM ~1, MiniMax ~2).
+
+### Batas konkurensi per model (`modelConcurrency`)
+
+Sebuah koneksi juga dapat mendeklarasikan batas konkurensi per model secara spesifik
+di dalam peta `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Atur melalui modal koneksi (**Pengesampingan batas laju → Batas konkurensi
+per model**, satu `model=cap` per baris) atau melalui
+`PATCH /api/providers/[id]` dengan bentuk JSON yang sama. Semantik utamanya:
+
+- **Seluruh koneksi vs khusus model:** `maxConcurrent` tetap menjadi batas bersama
+  untuk seluruh koneksi. Ketika keduanya berlaku, kedua gate diperoleh
+  secara atomik dalam gate komposit yang sama
+  (`global → provider → account → model`); perilaku efektif mengikuti batas
+  yang lebih ketat.
+- **Kecocokan persis kunci model:** kuncinya adalah string model yang diteruskan ke
+  eksekutor setelah resolusi perutean — biasanya id model upstream tanpa awalan
+  (`glm-5`), bukan alias `provider/model` di sisi klien (`zai/glm-5` tidak
+  cocok dengan `glm-5`). Nilainya adalah bilangan bulat positif yang membatasi permintaan serentak.
+- **Antrean lokal, tanpa penemuan:** permintaan berlebih masuk ke antrean lokal dengan
+  semantik antrean/batas waktu yang sudah ada (error admisi bertipe `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute tidak menemukan atau
+  menyimpulkan kebijakan upstream — OmniRoute memberlakukan batas persis yang
+  dikonfigurasi operator. Gate model yang jenuh tidak pernah menonaktifkan penyedia dan tidak pernah
+  membuat model terkunci secara permanen; perilaku 429/cooldown/fallback dari upstream
+  tetap menjadi mekanisme perlindungan terakhir terhadap error.
+- **Cakupan per koneksi, per proses:** batas berlaku per koneksi database
+  dan disimpan dalam memori, sehingga dua koneksi yang menggunakan kembali kunci API upstream yang sama
+  tidak saling berkoordinasi.
+- **Tidak dikonfigurasi berarti tidak berubah:** menghilangkan peta tersebut (atau membiarkan
+  kolom dasbor kosong) tidak menambahkan gate model. Contoh konfigurasi tanpa
+  menyatakan batas penyedia yang universal:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Serialisasi permintaan quota-share
 
-Ketika dispatch quota-share menargetkan koneksi yang mendeklarasikan
-`max_concurrent` positif, permintaan konkuren ke **akun** tersebut diserialisasi melalui
-semaphore per koneksi (kunci `qsconn:<connectionId>`): permintaan berlebih **menunggu dalam
-antrean** alih-alih membanjiri akun. Mekanisme ini bersifat **fail-open** — antrean yang penuh
-atau timeout akan dilanjutkan tanpa slot alih-alih menolak permintaan yang dapat
-didispatch. Aktifkan/nonaktifkan di **Pengaturan → Resiliensi → Konkurensi per koneksi
-quota-share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, aktif secara
-default). Tanpa batas `max_concurrent`, perilakunya tidak berubah.
+Ketika pengiriman quota-share menargetkan koneksi yang mendeklarasikan
+`max_concurrent` positif, permintaan serentak ke **akun** tersebut diserialisasi melalui
+semafor per koneksi (kunci `qsconn:<connectionId>`): permintaan berlebih **menunggu dalam
+antrean**, alih-alih membanjiri akun. Mekanisme ini bersifat **fail-open** — antrean yang jenuh
+atau batas waktu yang habis akan melanjutkan proses tanpa slot, alih-alih menolak permintaan
+yang dapat dikirim. Aktifkan atau nonaktifkan melalui **Pengaturan → Ketahanan → Konkurensi
+per koneksi quota-share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, aktif
+secara default). Tanpa batas `max_concurrent`, perilakunya tidak berubah.
 
-> Gerbang perutean quota-share (`selectQuotaShareTarget`, DRR + P2C) juga bersifat
-> fail-open dan hanya _menurunkan prioritas_ koneksi yang telah mencapai batas — dengan
-> pool berkoneksi tunggal, gerbang tersebut tidak dapat menerapkan batas secara tegas, sehingga semaphore inilah yang benar-benar
+> Gate perutean quota-share (`selectQuotaShareTarget`, DRR + P2C) itu sendiri
+> bersifat fail-open dan hanya _menurunkan prioritas_ koneksi yang telah mencapai batas — dengan
+> kumpulan berkoneksi tunggal, gate tersebut tidak dapat memberlakukan batas keras, sehingga semafor inilah yang benar-benar
 > membendung banjir permintaan.
 
-### Percobaan ulang combo yang menyadari cooldown
+### Percobaan ulang kombo yang memperhitungkan cooldown
 
-Untuk setiap strategi combo (ketika diaktifkan), permintaan yang akan menghasilkan 429
-akibat cooldown transien SINGKAT akan menunggu hingga cooldown berakhir lalu didispatch ulang, alih-alih
-mengembalikan 429 — ini mencakup jendela TPM/RPM kelas Gemini (~60 detik retry-after)
-pada combo multi-model, misalnya ketika kedua target dari combo 2-model mencapai batas laju
-per model. Dibatasi oleh `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) di **Pengaturan → Resiliensi**. Mekanisme ini tidak pernah menunggu untuk `quota_exhausted`
-(terkunci hingga tengah malam) atau alasan autentikasi/tidak ditemukan.
+Untuk setiap strategi kombo (jika diaktifkan), permintaan yang akan menghasilkan respons 429
+akibat cooldown sementara yang SINGKAT akan menunggu hingga cooldown berakhir dan dikirim ulang,
+alih-alih mengembalikan respons 429 — ini mencakup jendela TPM/RPM kelas Gemini
+(~60 dtk. retry-after) pada kombo multimodel, misalnya kedua target dalam kombo 2 model
+mencapai batas laju per model. Dibatasi oleh `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) di **Pengaturan → Ketahanan**. Mekanisme ini tidak pernah menunggu untuk alasan
+`quota_exhausted` (terkunci hingga tengah malam) atau autentikasi/tidak ditemukan.
 
 ---
 

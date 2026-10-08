@@ -209,24 +209,23 @@ OmniRoute에는 서로 구분되지만 관련성이 있는 세 가지 복원력 
 **상태별 키 범위:** 실패 상태에 따라 잠금이 기록되는 키가 결정됩니다
 (`open-sse/services/accountFallback/exactModelLock.ts`의 `resolveLockoutScope()`):
 
-- `429` / `403` / `402` — 할당량 또는 사용 권한 신호 — **할당량 계열**을 잠급니다:
-  codex의 경우 해당 연결의 전체 `codex` / `spark` 범위(모든 `gpt-5*` 모델),
-  그 외 제공자의 경우 `getQuotaScopedModelForProvider()`.
-- `404`는 기본 모델을 잠급니다(`getModelLockKey()`가 `not_found` 범위를 좁힘).
-- 그 외 모든 상태 — `5xx` 전송/서버 실패와 품질 검증에서 OmniRoute가 자체적으로
-  생성한 `502` — 는 정확한 제공자/연결/모델 조합만 잠급니다. 한 모델의 잘못된
-  스트림은 계정 할당량에 문제가 있다는 증거가 아닙니다. 이 규칙이 도입되기
-  전에는 `codex/gpt-5.6-luna`에서 빈 응답이 한 번만 발생해도 해당 연결의 모든
-  `gpt-5*` 모델이 할당량에는 아무런 문제가 없음에도 라우팅에서 2~30분 동안
-  제외되었습니다(시간은 점차 증가).
+- `429` / `403` / `402` — 할당량 또는 권한 신호 — **할당량 계열**을 잠급니다.
+  codex의 경우 연결에 속한 모든 `gpt-5*` 모델을 포함하는 전체 `codex` / `spark` 범위이며,
+  다른 제공자의 경우 `getQuotaScopedModelForProvider()`를 사용합니다.
+- `404`는 해당 모델 자체를 잠급니다(`getModelLockKey()`가 `not_found`의 범위를 좁힘).
+- 그 외 모든 상태 — `5xx` 전송/서버 실패 및 품질 검증에서 OmniRoute가 자체적으로
+  생성한 `502` — 는 정확한 제공자/연결/모델 조합만 잠급니다. 한 모델의 잘못된 스트림은
+  계정 할당량에 문제가 있다는 증거가 아닙니다. 이 규칙이 적용되기 전에는
+  `codex/gpt-5.6-luna`의 빈 응답 한 번만으로도 할당량에는 아무런 영향이 없는데도
+  해당 연결의 모든 `gpt-5*` 모델이 2~30분 동안(점차 증가) 라우팅에서 제외되었습니다.
 - 호출자가 명시적으로 지정한 `scope` 옵션이 항상 우선합니다(Antigravity는 `"exact"`를 전달).
 
-**목적:** 모델 하나만 사용할 수 없거나 할당량 제한에 걸렸을 때 전체 연결이 비활성화되는 것을 방지합니다.
+**목적:** 단 하나의 모델만 사용할 수 없거나 할당량이 제한된 경우 전체 연결이 비활성화되는 것을 방지합니다.
 
 **예시:**
 
-- 모델별 할당량을 적용하는 제공자가 429를 반환하는 경우
-- 로컬 제공자가 누락된 모델 하나에 대해 404를 반환하는 경우
+- 429를 반환하는 모델별 할당량 제공자
+- 누락된 모델 하나에 대해 404를 반환하는 로컬 제공자
 - 제공자별 모드/모델 권한 실패(예: Grok 모드)
 
 **구현:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
@@ -235,79 +234,161 @@ OmniRoute에는 서로 구분되지만 관련성이 있는 세 가지 복원력 
 
 UI: 설정 → 모델 쿨다운 (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-활성 잠금을 제공자, 연결, 모델, 사유, expiresAt 정보와 함께 표시합니다. 운영자는 카드에서 모델을 수동으로 다시 활성화할 수 있습니다.
+활성 잠금을 provider, connection, model, reason, expiresAt 정보와 함께 나열합니다. 운영자는 카드에서 모델을 수동으로 다시 활성화할 수 있습니다.
 
 **REST API:**
 
 - `GET /api/resilience/model-cooldowns` — 활성 잠금 목록 조회
 - `DELETE /api/resilience/model-cooldowns` — 수동 재활성화. 본문: `{provider, connection, model}`. 인증: 관리 권한.
 
+### 쿨다운 관리자
+
+UI: 모니터링 → 쿨다운 관리자 (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+각 제공자 페이지를 열지 않고도 일시적인 이유로 라우팅에서 제외된 모든 연결을 확인할 수 있는
+통합 페이지입니다. 연결 쿨다운, 모델 잠금 및 종료 상태를 나열하며, 연결별, 선택 항목별 또는
+한 제공자의 모든 연결에 대해 이를 해제할 수 있습니다. 또한 가장 세밀하게 조정되는 쿨다운 규칙인
+`streamStallCooldown.enabled`와 OAuth / API 키 `connectionCooldown`의 기본 쿨다운 및 최대 백오프
+단계를 편집합니다(`PATCH /api/resilience`를 통해 저장). 종료 상태(`banned`, `expired`,
+`credits_exhausted`)는 목록에 표시되지만 여기에서는 절대 해제되지 않습니다.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, 인증: 관리 권한):
+
+- `GET /api/resilience/cooldowns[?provider=]` — 상태, 남은 쿨다운,
+  백오프 수준, 마지막 오류 유형 및 모델 잠금을 포함한 연결 목록(자격 증명 제외)
+- `POST /api/resilience/cooldowns` — 본문 `{connectionIds: string[]}` 또는
+  `{all: true, provider?}`; `{cleared, unchanged, skippedTerminal, lockoutsCleared}` 반환
+
 ### 잠금 설정 UI + 성공 감쇠 복구 (v3.8.23)
 
-모델 잠금은 항상 활성화된 하드코딩 동작에서 자체 설정 카드와 자가 복구 경로를
-갖춘 완전히 구성 가능한 옵트인 기능으로 변경되었습니다.
+모델 잠금은 항상 활성화되는 하드코딩된 동작에서 자체 설정 카드와 자가 복구 경로를 갖춘,
+완전히 구성 가능한 옵트인 기능으로 변경되었습니다.
 
 **설정 카드:** 설정 → 모델 잠금
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-이는 위의 읽기 전용 `ModelCooldownsCard`(활성 잠금을 _나열_만 함)와
-**별개**이며, 새 카드는 _매개변수를 구성_합니다. 기본값은
-`DEFAULT_MODEL_LOCKOUT_SETTINGS`
-(`src/lib/resilience/modelLockoutSettings.ts`)에 정의되어 있습니다:
+이는 위의 읽기 전용 `ModelCooldownsCard`(활성 잠금을 _나열_하기만 함)와 **별개입니다**.
+새 카드는 _매개변수를 구성_합니다. 기본값은 `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+(`src/lib/resilience/modelLockoutSettings.ts`)에 있습니다.
 
-| 설정                    | 기본값                           | 의미                                                            |
-| ----------------------- | -------------------------------- | --------------------------------------------------------------- |
-| `enabled`               | `false`                          | 마스터 토글 — 모델 잠금은 **기본적으로 비활성화**되어 있습니다. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 모델 범위 실패로 간주되는 업스트림 상태입니다.                  |
-| `baseCooldownMs`        | `120_000` (120초)                | 첫 번째 실패에 적용되는 초기 잠금 시간입니다.                   |
-| `maxCooldownMs`         | `1_800_000` (30분)               | 단계적으로 증가한 쿨다운의 상한입니다.                          |
-| `maxBackoffSteps`       | `10`                             | 최대 지수 백오프 증가 단계 수입니다.                            |
-| `useExponentialBackoff` | `true`                           | 반복되는 실패에 따라 쿨다운을 지수적으로 늘릴지 여부입니다.     |
+| 설정                    | 기본값                           | 의미                                                      |
+| ----------------------- | -------------------------------- | --------------------------------------------------------- |
+| `enabled`               | `false`                          | 마스터 토글 — 모델 잠금은 **기본적으로 꺼져 있습니다**.   |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | 모델 범위 실패로 간주되는 업스트림 상태입니다.            |
+| `baseCooldownMs`        | `120_000` (120초)                | 첫 번째 실패에 적용되는 초기 잠금 지속 시간입니다.        |
+| `maxCooldownMs`         | `1_800_000` (30분)               | 단계적으로 증가한 쿨다운의 상한입니다.                    |
+| `maxBackoffSteps`       | `10`                             | 지수 백오프가 증가할 수 있는 최대 단계 수입니다.          |
+| `useExponentialBackoff` | `true`                           | 반복된 실패 시 쿨다운을 지수적으로 증가시킬지 여부입니다. |
 
-설정은 일반 설정 저장소를 통해 유지되며 복원력 설정 스키마를 통해 검증됩니다.
-카드는 `baseCooldownMs`/`maxCooldownMs`(`maxCooldownMs ≥ baseCooldownMs`)와
+설정은 일반 설정 저장소를 통해 유지되며 복원력 설정 스키마를 통해 검증됩니다. 카드는
+`baseCooldownMs`/`maxCooldownMs`(`maxCooldownMs ≥ baseCooldownMs`) 및
 `maxBackoffSteps`를 허용 범위로 제한합니다.
 
-**성공 감쇠 복구:** 복구는 단순히 타이머 만료에만 의존하지 **않습니다**. 정상
-응답이 발생하면 모델의 실패 횟수가 점차 감소하므로, 기간 중간에 복구된 모델은
-타이머가 만료되기 전에 증가가 멈추고 잠금이 해제됩니다. 조합 대상이 성공하면
-`open-sse/services/combo.ts`가 `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`)를 호출하여 저장된
-`failureCount`를 **절반으로 줄입니다**(`Math.floor(failureCount / 2)`).
-값이 `0`에 도달하면 잠금 항목이 완전히 삭제됩니다. 이에 대응하는
-`recordModelLockoutFailure()`는 증가 기간 내에 실패가 발생할 때 횟수를
-증가시키고 쿨다운을 늘립니다. 이 성공 감쇠는 일반적인 타이머 만료에 더해
-적용되며, 어느 경로를 통해서든 모델을 다시 활성화할 수 있습니다.
+**성공 감쇠 복구:** 복구는 단순히 타이머 만료에만 의존하지 **않습니다**. 정상 응답은 모델의
+실패 횟수를 점진적으로 감소시키므로, 기간 중간에 복구된 모델은 타이머 만료 전에 단계적 증가가
+중단되고 잠금이 해제됩니다. 조합 대상이 성공하면 `open-sse/services/combo.ts`가
+`decayModelFailureCount()`(`open-sse/services/accountFallback.ts`)를 호출하여 저장된
+`failureCount`를 **절반으로 줄입니다**(`Math.floor(failureCount / 2)`). 값이 `0`에 도달하면
+잠금 항목이 완전히 삭제됩니다. 이에 대응하는 `recordModelLockoutFailure()`는 단계적 증가 기간
+내에 실패가 발생하면 횟수를 증가시키고 쿨다운을 단계적으로 늘립니다. 이 성공 감쇠는 단순한 타이머
+만료에 더해 적용되며, 어느 경로를 통해서든 모델을 다시 활성화할 수 있습니다.
 
-**상태:** 잠금은 DB에 유지되지 않고 **메모리 내**에 보관됩니다
-(`provider:connectionId:model`을 키로 사용하는 프로세스별 `ModelLockoutEntry`
-`Map`, 정확 범위 잠금은 `provider:connectionId:exact:model`을 키로 사용).
-따라서 재시작하면 잠금이 사라집니다. _설정_은 유지되지만 활성 잠금 _상태_는
-일시적입니다.
+**상태:** 잠금은 DB에 유지되지 않고 `provider:connectionId:model`을 키로 사용하는
+`ModelLockoutEntry`의 프로세스별 `Map`과 `provider:connectionId:exact:model`을 키로 사용하는
+정확 범위 잠금으로 **메모리 내**에 보관되므로 재시작하면 사라집니다. _설정_은 유지되지만 활성
+잠금 _상태_는 일시적입니다.
 
 ---
 
-## 4. 할당량 공유 동시성 제어 (v3.8.36)
+## 4. 쿼터 공유 동시성 제어 (v3.8.36)
 
-구독 계정(GLM, MiniMax 등)은 대개 약 1~3개의 동시 요청만 허용하며, 이를 초과하면 429 응답과 쿨다운이 발생합니다. 여러 API 키가 하나의 업스트림 계정을 공유하는 **할당량 공유**(`qtSd/…`) 콤보에서는 이 문제가 특히 심각합니다. 세 가지 계층을 통해 공유 계정에 요청이 과도하게 몰리는 것을 방지합니다.
+구독 계정(GLM, MiniMax 등)은 대개 약 1~3개의 동시 요청만 허용하며,
+이를 초과하면 429 응답과 쿨다운이 발생합니다. 여러 API 키가 하나의
+업스트림 계정을 공유하는 **쿼터 공유**(`qtSd/…`) 콤보에서는 이 문제가
+특히 심각합니다. 세 가지 계층을 통해 공유 계정에 요청이 과도하게
+몰리는 것을 방지합니다.
 
 ### 연결별 동시성 상한 (`max_concurrent`)
 
 각 공급자 연결은 `max_concurrent` 상한을 선언할 수 있습니다
-(`provider_connections.max_concurrent`, 연결 모달/API/DB에서 설정).
-제한을 두지 않으려면 비워 두십시오. 이 값은 아래 직렬화 계층을 제어하는 단일 설정입니다. 계정의 실제 동시성에 맞게 설정하십시오(예: GLM 약 1, MiniMax 약 2).
+(`provider_connections.max_concurrent`, 연결 모달 / API / DB에서 설정).
+제한하지 않으려면 비워 두십시오. 이 값은 아래의 직렬화 계층을 제어하는
+단일 설정입니다. 계정의 실제 동시성에 맞게 설정하십시오(예: GLM 약 1,
+MiniMax 약 2).
 
-### 할당량 공유 요청 직렬화
+### 모델별 동시성 상한 (`modelConcurrency`)
 
-할당량 공유 디스패치가 양수인 `max_concurrent`를 선언한 연결을 대상으로 할 경우, 해당 **계정**에 대한 동시 요청은 연결별 세마포어(키 `qsconn:<connectionId>`)를 통해 직렬화됩니다. 초과 요청은 계정에 한꺼번에 몰리는 대신 **대기열에서 기다립니다**. 이 기능은 **장애 시 개방(fail-open)** 방식으로 동작합니다. 즉, 대기열이 포화되거나 시간 초과가 발생하면 디스패치 가능한 요청을 거부하지 않고 슬롯 없이 진행합니다. **설정 → 복원력 → 할당량 공유 연결별 동시성**에서 전환할 수 있습니다(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, 기본값은 활성화). `max_concurrent` 상한이 없으면 동작은 변경되지 않습니다.
+연결은 `rateLimitOverrides` 맵 내부에서 모델별 동시성 상한을 정확히
+지정할 수도 있습니다.
 
-> 할당량 공유 라우팅 게이트(`selectQuotaShareTarget`, DRR + P2C) 자체도
-> 장애 시 개방 방식이며, 상한에 도달한 연결의 우선순위를 _낮추기만_ 합니다.
-> 연결이 하나뿐인 풀에서는 엄격한 제한을 적용할 수 없으므로, 실제로 요청 폭주를
-> 억제하는 것은 이 세마포어입니다.
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
 
-### 쿨다운을 인식하는 콤보 재시도
+연결 모달의 **요청 속도 제한 재정의 → 모델별 동시성 상한**에서 설정하거나
+(한 줄에 하나의 `model=cap`) 동일한 JSON 구조를 사용해
+`PATCH /api/providers/[id]`로 설정하십시오. 키의 의미는 다음과 같습니다.
 
-모든 콤보 전략에서 이 기능이 활성화된 경우, 짧은 일시적 쿨다운으로 인해 429 응답이 확정될 요청은 429를 반환하는 대신 쿨다운이 끝날 때까지 기다린 후 다시 디스패치됩니다. 이는 다중 모델 콤보에서 Gemini 계열의 TPM/RPM 제한 시간대(약 60초의 retry-after)를 처리합니다. 예를 들어 2개 모델 콤보의 두 대상이 모두 모델별 속도 제한에 도달한 경우가 이에 해당합니다. **설정 → 복원력**의 `comboCooldownWait`(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`)에 의해 제한됩니다. `quota_exhausted`(자정까지 잠김) 또는 인증/찾을 수 없음 사유에는 절대 대기하지 않습니다.
+- **연결 전체와 모델별 제한:** `maxConcurrent`는 연결 전체에 공유되는
+  상한으로 유지됩니다. 두 제한이 모두 적용되는 경우 동일한 복합 게이트에서
+  두 게이트를 원자적으로 획득합니다
+  (`global → provider → account → model`). 실질적으로는 적용 가능한 제한 중
+  더 엄격한 제한이 적용됩니다.
+- **정확한 모델 키 일치:** 키는 라우팅 결정 후 실행기에 전달되는 모델
+  문자열입니다. 일반적으로 클라이언트 측 `provider/model` 별칭이 아니라
+  업스트림의 기본 모델 ID(`glm-5`)입니다(`zai/glm-5`는 `glm-5`와
+  일치하지 않음). 값은 양의 정수로 지정하는 동시 요청 상한입니다.
+- **로컬 대기열 처리, 자동 탐지 없음:** 초과 요청은 기존 대기열/타임아웃
+  동작에 따라 로컬에서 대기합니다(형식이 지정된 `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` 승인 오류). OmniRoute는 업스트림 정책을 탐지하거나
+  추론하지 않으며, 운영자가 구성한 정확한 상한을 적용합니다. 포화 상태인
+  모델 게이트는 공급자를 비활성화하거나 영구적인 모델 잠금을 생성하지
+  않습니다. 업스트림의 429/쿨다운/폴백 동작은 최종 오류 방어 수단으로
+  유지됩니다.
+- **연결별, 프로세스별 범위:** 상한은 데이터베이스 연결별로 적용되며
+  메모리에 유지되므로, 동일한 업스트림 API 키를 재사용하는 두 연결은
+  서로 조정되지 않습니다.
+- **구성하지 않으면 변경 없음:** 맵을 생략하거나 대시보드 필드를 비워
+  두면 모델 게이트가 추가되지 않습니다. 모든 공급자에 공통으로 적용되는
+  제한을 가정하지 않는 구성 예시는 다음과 같습니다.
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### 쿼터 공유 요청 직렬화
+
+쿼터 공유 디스패치가 양수 `max_concurrent`를 선언한 연결을 대상으로 할
+경우, 해당 **계정**에 대한 동시 요청은 연결별 세마포어
+(키 `qsconn:<connectionId>`)를 통해 직렬화됩니다. 초과 요청은 계정에
+한꺼번에 몰리는 대신 **대기열에서 기다립니다**. 이 동작은
+**fail-open** 방식입니다. 대기열이 포화되거나 타임아웃이 발생해도 디스패치
+가능한 요청을 거부하지 않고 슬롯 없이 계속 진행합니다.
+**설정 → 복원력 → 쿼터 공유 연결별 동시성**
+(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, 기본적으로
+활성화)에서 전환할 수 있습니다. `max_concurrent` 상한이 없으면 동작은
+변경되지 않습니다.
+
+> 쿼터 공유 라우팅 게이트(`selectQuotaShareTarget`, DRR + P2C) 자체도
+> fail-open 방식이며 상한에 도달한 연결의 우선순위만 _낮춥니다_.
+> 연결이 하나뿐인 풀에서는 이를 엄격하게 제한할 수 없으므로, 실제로 요청
+> 폭주를 억제하는 것은 이 세마포어입니다.
+
+### 콤보의 쿨다운 인식 재시도
+
+활성화된 모든 콤보 전략에서 SHORT 일시적 쿨다운으로 인해 429 응답이
+확정될 요청은 429를 반환하는 대신 쿨다운이 끝날 때까지 기다린 후 다시
+디스패치됩니다. 이는 다중 모델 콤보에서 Gemini 계열 TPM/RPM 윈도
+(약 60초의 retry-after)를 처리합니다. 예를 들어 2개 모델 콤보의 두 대상이
+모두 모델별 요청 속도 제한에 도달한 경우가 이에 해당합니다.
+**설정 → 복원력**의 `comboCooldownWait`(`enabled`, `maxWaitMs`,
+`maxAttempts`, `budgetMs`) 설정에 따라 제한됩니다. `quota_exhausted`
+(자정까지 잠김) 또는 인증/찾을 수 없음 사유인 경우에는 대기하지 않습니다.
 
 ---
 

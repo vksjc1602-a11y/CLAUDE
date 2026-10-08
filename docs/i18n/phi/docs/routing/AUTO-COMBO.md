@@ -278,60 +278,62 @@ na-resolve na value ay ipinapasa sa mga umiiral na input na `config.modePack` / 
 `config.budgetFallback` ng engine. Itinatakda ng nakaimbak na `config.budgetFallback` ("strict" |
 "cheapest") ng isang combo ang persistent na patakaran; ino-override ito ng header para sa isang request.
 
-## Lahat ng Estratehiya sa Routing
+## Lahat ng Estratehiya sa Pag-route
 
-Sinusuportahan ng combo engine ng OmniRoute ang **19 na estratehiya sa routing** (idinideklara sa `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Ang Auto Combo engine mismo ay inilalantad sa ilalim ng estratehiyang `auto`; magagamit naman ang iba para sa mga naka-persist na combo.
+Sinusuportahan ng combo engine ng OmniRoute ang **20 estratehiya sa pag-route** (idineklara sa `src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES`). Ang Auto Combo engine mismo ay inilalantad sa ilalim ng estratehiyang `auto`; available naman ang iba para sa mga naka-persist na combo.
 
-| Estratehiya         | Paglalarawan                                                                                                                                                                                                                      |
-| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `priority`          | Nakaayos na listahan na inuuna ang unang target at may tahasang prayoridad                                                                                                                                                        |
-| `weighted`          | Weighted random batay sa timbang ng bawat target                                                                                                                                                                                  |
-| `round-robin`       | Umikot sa mga target ayon sa pagkakasunod-sunod (naka-batch; tingnan sa ibaba)                                                                                                                                                    |
-| `context-relay`     | Ipasa ang konteksto sa iba't ibang target (mahahabang pag-uusap)                                                                                                                                                                  |
-| `fill-first`        | Punuin ang quota ng bawat target bago lumipat sa susunod                                                                                                                                                                          |
-| `p2c`               | Random na pagbalanse ng load gamit ang power-of-2-choices                                                                                                                                                                         |
-| `random`            | Pantay-pantay na random na pagpili                                                                                                                                                                                                |
-| `least-used`        | Piliin ang target na may pinakamababang kasalukuyang load                                                                                                                                                                         |
-| `cost-optimized`    | Bawasan sa minimum ang $ bawat request batay sa pagpepresyo sa catalog                                                                                                                                                            |
-| `reset-aware` ⭐    | Magtakda ng prayoridad batay sa oras ng pag-reset ng quota — mas mataas ang ranggo ng maiikling reset window                                                                                                                      |
-| `reset-window`      | Piliin ang mga target na pinakamalapit nang mag-reset ang quota window                                                                                                                                                            |
-| `headroom`          | Piliin ang target na may pinakamaraming natitirang puwang sa quota                                                                                                                                                                |
-| `strict-random`     | Random nang walang deduplication ng mga pag-uulit                                                                                                                                                                                 |
-| `auto`              | Gamitin ang pagmamarka ng Auto Combo (16 na salik) — **inirerekomenda**                                                                                                                                                           |
-| `lkgp`              | Last-Known-Good Path (ipinipirmi sa huling matagumpay na provider, pagkatapos ay bumabalik sa mga panuntunan kapag pumalya)                                                                                                       |
-| `context-optimized` | Piliin ang target na pinakaangkop sa kasalukuyang laki ng konteksto                                                                                                                                                               |
-| `cache-optimized`   | Muling ayusin ang mga target batay sa affinity ng prompt cache — unang susubukan ang koneksiyong pinakamalamang na mayroon na ng naka-cache na prefix ng request na ito (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
-| `fusion` 🧬         | Ipadala nang parallel sa isang panel ng mga modelo, pagkatapos ay bumuo ng iisang sagot sa pamamagitan ng isang judge (tingnan sa ibaba)                                                                                          |
-| `pipeline`          | Patakbuhin ang mga target nang sunod-sunod, na ipinapasa ang output ng bawat hakbang bilang input ng susunod na hakbang; ang panghuling sagot lamang ang ibinabalik (#6396)                                                       |
+| Estratehiya         | Paglalarawan                                                                                                                                                                                                                          |
+| :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `priority`          | Nakaayos na listahan na inuuna ang unang target, na may tahasang priyoridad                                                                                                                                                           |
+| `weighted`          | Weighted random batay sa timbang ng bawat target                                                                                                                                                                                      |
+| `round-robin`       | Paikutin ang mga target ayon sa pagkakasunod-sunod (naka-batch; tingnan sa ibaba)                                                                                                                                                     |
+| `context-relay`     | Ipasa ang context sa iba't ibang target (mahahabang pag-uusap)                                                                                                                                                                        |
+| `fill-first`        | Punuin ang quota ng bawat target bago lumipat sa susunod                                                                                                                                                                              |
+| `p2c`               | Random na pagbalanse ng load gamit ang power-of-2-choices                                                                                                                                                                             |
+| `random`            | Pare-parehong random na pagpili                                                                                                                                                                                                       |
+| `least-used`        | Piliin ang target na may pinakamababang kasalukuyang load                                                                                                                                                                             |
+| `cost-optimized`    | Bawasan sa minimum ang $ bawat request batay sa presyo sa catalog                                                                                                                                                                     |
+| `reset-aware` ⭐    | Magtakda ng priyoridad batay sa oras ng pag-reset ng quota — mas mataas ang ranggo ng maiikling reset window                                                                                                                          |
+| `reset-window`      | Piliin ang mga target na pinakamalapit nang mag-reset ang quota window                                                                                                                                                                |
+| `headroom`          | Piliin ang target na may pinakamaraming natitirang quota headroom                                                                                                                                                                     |
+| `quota-weighted`    | Laktawan ang mga account na ubos na ang quota, pagkatapos ay pumili sa mga natitira ayon sa proporsyon ng natitirang quota na hinati sa kasalukuyang in-flight load; nananatiling naka-pin ang mga umiiral na pag-uusap               |
+| `strict-random`     | Random na walang pag-aalis ng mga pag-uulit                                                                                                                                                                                           |
+| `auto`              | Gamitin ang Auto Combo scoring (16-factor) — **inirerekomenda**                                                                                                                                                                       |
+| `lkgp`              | Last-Known-Good Path (ini-pin sa huling matagumpay na provider, pagkatapos ay bumabalik sa mga panuntunan kung mabigo)                                                                                                                |
+| `context-optimized` | Piliin ang target na pinakaangkop sa kasalukuyang laki ng context                                                                                                                                                                     |
+| `cache-optimized`   | Muling ayusin ang mga target ayon sa prompt-cache affinity — unang sinusubukan ang connection na pinakamalamang na nagtataglay na ng naka-cache na prefix ng request na ito (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
+| `fusion` 🧬         | Ipadala nang sabay-sabay sa isang panel ng mga modelo, pagkatapos ay bumuo ng iisang sagot sa pamamagitan ng isang judge (tingnan sa ibaba)                                                                                           |
+| `pipeline`          | Patakbuhin ang mga target nang sunod-sunod, na ipinapasa ang output ng bawat hakbang bilang input ng susunod na hakbang; ang panghuling sagot lamang ang ibinabalik (#6396)                                                           |
 
 ⭐ = Bago sa v3.8.0 · 🧬 = Bago sa v3.8.36
 
 ### Semantika ng `weighted`
 
-Ang `weighted` ay isang **proporsiyonal na random na pagpili sa bawat request**
+Ang `weighted` ay isang **proporsyonal na random draw sa bawat request**
 (`open-sse/services/combo/targetSorters.ts` → `selectWeightedTarget`), hindi isang equalizer:
 
-- Pumipili ang bawat request ng **isang** hakbang na may probability na `weight / totalWeight`; ang mga natitirang hakbang
+- Sa bawat request, kumukuha ng **isang** hakbang na may probability na `weight / totalWeight`; ang mga natitirang hakbang
   ay inaayos ayon sa pababang timbang bilang fallback chain para sa request na iyon.
-- Ang hakbang na may timbang na `0` (o walang nakatakdang timbang) ay **hindi kailanman pinipili** habang may ibang hakbang na
-  may timbang > 0 — maaari lamang itong magsilbing fallback kapag pumalya ang napiling hakbang. Kapag **lahat**
-  ng timbang ay 0, saka lamang nagiging pantay-pantay ang pagpili.
-- Ang mga hakbang na hindi available ang lahat ng target — provider circuit breaker na `OPEN`, cooldown ng koneksiyon,
-  lockout ng modelo — ay inaalis sa pagpipilian bago isagawa ang pagpili
-  (`open-sse/services/combo/targetResolution.ts`), kaya maaaring pansamantalang mapili sa bawat request ang iisang maayos na hakbang.
-- Ipinipirmi ng `stickyWeightedLimit` (combo config, default na `1` = naka-off) ang napiling hakbang para sa ganoong karaming
-  magkakasunod na tagumpay bago muling pumili.
+- Ang hakbang na may timbang na `0` (o walang timbang) ay **hindi kailanman napipili sa draw** habang may ibang hakbang na
+  may timbang > 0 — maaari lamang itong magsilbing fallback kapag nabigo ang napiling hakbang. Kapag **lahat** lamang
+  ng timbang ay 0 nagiging pare-pareho ang pagpili.
+- Ang mga hakbang na hindi available ang lahat ng target — provider circuit breaker na `OPEN`, connection
+  cooldown, model lockout — ay inaalis sa draw bago ito isagawa
+  (`open-sse/services/combo/targetResolution.ts`), kaya maaaring pansamantalang mapili ng nag-iisang maayos na hakbang
+  ang bawat request.
+- Ini-pin ng `stickyWeightedLimit` (combo config, default na `1` = naka-off) ang napiling hakbang para sa ganoong karaming
+  magkakasunod na tagumpay bago muling magsagawa ng draw.
 
 Para sa mahigpit na pag-ikot, gamitin ang `round-robin`; ang magkakapantay na timbang sa `weighted` ay nagbibigay ng estadistikal — hindi
 mahigpit — na balanse.
 
-### Agentic pipeline mode
+### Mode ng agentic pipeline
 
-Maaaring mag-opt in ang two-step na `pipeline` combo sa planner/executor routing gamit ang
-`config.agenticOrchestration.enabled`. Ang unang target ang nangangasiwa sa pagpaplano at mga panghuling sagot;
-ang pangalawang target ay naglalabas ng mga client-native tool call. Tinutukoy ng OmniRoute ang mga pagpapatuloy na
-tool-result mula sa request protocol, tinatanong ang planner kung kailangan ng isa pang tool round,
-at dinamikong ginagawang panghuling hakbang na nakaharap sa client ang executor o planner.
+Maaaring mag-opt in ang isang dalawang-hakbang na `pipeline` combo sa pagruruta ng planner/executor gamit ang
+`config.agenticOrchestration.enabled`. Ang unang target ang nangangasiwa sa pagpaplano at mga pinal na sagot;
+ang pangalawang target ang naglalabas ng mga tool call na native sa client. Tinutukoy ng OmniRoute ang mga pagpapatuloy ng
+tool-result mula sa protocol ng kahilingan, tinatanong ang planner kung kailangan pa ng isa pang round ng tool,
+at dinamikong ginagawang pinal na hakbang na nakaharap sa client ang executor o planner.
 
 ```json
 {
@@ -343,34 +345,35 @@ at dinamikong ginagawang panghuling hakbang na nakaharap sa client ang executor 
 }
 ```
 
-Maaaring maglabas ang executor ng maraming magkakahiwalay na call sa isang tugon. Ang mga dependent na call ay
+Maaaring maglabas ang executor ng maraming independiyenteng call sa isang tugon. Ang mga magkakaugnay na call ay
 pinangangasiwaan sa mga susunod na client tool-result turn, habang sinusuri ng planner ang bawat resulta.
-Ang `maxToolRounds` ay may default na `8` at tumatanggap ng `1`–`32`; kapag naabot na ito, dapat
-ibigay ng planner ang pinakamahusay na panghuling sagot na available. Bina-buffer ang mga internal na desisyon ng planner, habang
-pinananatili ng napiling tugon na nakaharap sa client ang orihinal na kagustuhan sa streaming.
+Ang default ng `maxToolRounds` ay `8` at tumatanggap ito ng `1`–`32`; kapag naabot na ito, dapat
+ibigay ng planner ang pinakamahusay na available na pinal na sagot. Naka-buffer ang mga panloob na pasya ng planner, habang
+pinapanatili ng napiling tugon na nakaharap sa client ang orihinal na kagustuhan sa streaming.
 
 ### Sticky batch at pagpapalawak ng account ng `round-robin`
 
-Naka-batch ang round-robin, hindi isang request sa bawat hakbang:
+Naka-batch ang round-robin, hindi isang kahilingan sa bawat hakbang:
 
-- Pinananatili ng `stickyRoundRobinLimit` (combo config, pagkatapos ay `comboStickyRoundRobinLimit`, pagkatapos ay
+- Pinapanatili ng `stickyRoundRobinLimit` (combo config, pagkatapos ay `comboStickyRoundRobinLimit`, pagkatapos ay
   `settings.stickyRoundRobinLimit`, default na **3**) ang parehong target para sa ganoong karaming
-  magkakasunod na tagumpay bago lumipat. Itakda ang combo override sa `1` para sa paglipat sa bawat request.
+  magkakasunod na tagumpay bago umikot. Itakda ang combo override sa `1` para sa pag-ikot sa bawat kahilingan.
   Ipinapakita ng combo editor ang epektibong value at kung saang layer ito nagmula.
-- Pinapalawak ng `connectionAwareExpansion` (combo config, pagkatapos ay settings, default na **false**) ang
-  bawat provider-level na hakbang sa mga per-account target bago ang rotation. Ang mga Group-B strategy
+- Pinalalawak ng `connectionAwareExpansion` (combo config, pagkatapos ay settings, default na **false**)
+  ang bawat hakbang sa antas ng provider upang maging mga target sa bawat account bago ang pag-ikot. Ang mga strategy ng Group-B
   (priority, weighted, round-robin, random, p2c, least-used, cost-optimized, lkgp,
   fill-first, strict-random, context-optimized, cache-optimized, context-relay, fusion,
-  pipeline) ay nagpapanatili ng provider-level na view hanggang sa i-on ito. Inilalantad ng combo editor ang
-  inherit / on / off; ginagamit ng inherit ang global default (off).
-- Muling isinasaayos ng prompt-cache locality routing (`promptCacheAffinityEnabled`, default na **true**) ang
-  mga naka-pin na connection upang manatili sa iisang account ang magkakatugmang cache key. Mas inuuna ito kaysa sa
-  round-robin at weighted rotation sa mga naka-pin na per-account na hakbang. I-off ito sa ilalim ng
-  Settings → Combo defaults kung kailangan mo ng mahigpit na rotation. Walang per-combo override.
+  pipeline) ay nagpapanatili ng view sa antas ng provider hanggang sa i-on ito. Nagbibigay ang combo editor ng
+  inherit / on / off; ginagamit ng inherit ang pandaigdigang default (off).
+- Muling inaayos ng pagruruta ayon sa lokalidad ng prompt-cache (`promptCacheAffinityEnabled`, default na **true**)
+  ang mga naka-pin na connection upang manatili sa iisang account ang magkakatugmang cache key. Mas inuuna ito kaysa
+  sa round-robin at weighted na pag-ikot sa mga naka-pin na hakbang sa bawat account. I-off ito sa ilalim ng
+  Settings → Combo defaults kung kailangan mo ng mahigpit na pag-ikot. Walang override para sa bawat combo.
 
-Para sa multi-account rotation sa isang model, mas piliin ang **isang dynamic-account step** (walang laman na
+Para sa pag-ikot sa maraming account sa iisang model, piliin ang **isang dynamic-account step** (walang laman na
 `connectionId`, buong pool) na may sticky limit na `1`, sa halip na tatlong naka-pin na `connectionId`.
-Ang mga naka-pin na hakbang kasama ng affinity ay nagsasama-sama sa iisang account kahit habang umuusad ang RR counter.
+Dahil sa pinagsamang mga naka-pin na hakbang at affinity, nauuwi ang lahat sa iisang account kahit patuloy na
+umuusad ang RR counter.
 
 ## Estratehiya ng Fusion
 
@@ -814,12 +817,12 @@ Sinusubukan ng mga smoke test na ito ang tunay na wire path (combo → provider 
 | File                                                      | Layunin                                                                                                         |
 | :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
 | `open-sse/services/autoCombo/scoring.ts`                  | 16-factor na scoring function, `DEFAULT_WEIGHTS`, pool norm                                                     |
-| `open-sse/services/autoCombo/taskFitness.ts`              | Lookup ng pagiging angkop ng model × gawain                                                                     |
+| `open-sse/services/autoCombo/taskFitness.ts`              | Lookup ng fitness ng model × gawain                                                                             |
 | `open-sse/services/autoCombo/engine.ts`                   | Lohika ng pagpili, bandit, limitasyon sa badyet                                                                 |
 | `open-sse/services/autoCombo/selfHealing.ts`              | Pagbubukod, mga probe, incident mode                                                                            |
 | `open-sse/services/autoCombo/modePacks.ts`                | 6 na profile ng timbang (ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode) |
 | `open-sse/services/autoCombo/autoPrefix.ts`               | Parser ng prefix na `auto/` + 6 na variant                                                                      |
-| `open-sse/services/autoCombo/virtualFactory.ts`           | Bumubuo ng in-memory na `AutoComboConfig` mula sa mga live na koneksyon                                         |
+| `open-sse/services/autoCombo/virtualFactory.ts`           | Bumubuo ng in-memory na `AutoComboConfig` mula sa mga aktibong koneksyon                                        |
 | `open-sse/services/autoCombo/providerRegistryAccessor.ts` | Test hook para sa pag-mock ng provider registry                                                                 |
-| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (19 na strategy)                                                                      |
-| `src/sse/handlers/chat.ts`                                | Integrasyon: auto-prefix short-circuit                                                                          |
+| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (20 diskarte)                                                                         |
+| `src/sse/handlers/chat.ts`                                | Integrasyon: short-circuit ng auto-prefix                                                                       |

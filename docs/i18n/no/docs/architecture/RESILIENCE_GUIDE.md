@@ -213,16 +213,16 @@ Relaterte mekanismer forblir separate:
 til (`resolveLockoutScope()` i `open-sse/services/accountFallback/exactModelLock.ts`):
 
 - `429` / `403` / `402` — et kvote- eller tilgangssignal — sperrer **kvotefamilien**:
-  for codex hele `codex`- / `spark`-omfanget (alle `gpt-5*`-modellene for
+  for codex hele omfanget `codex` / `spark` (alle `gpt-5*`-modeller for
   tilkoblingen), for andre leverandører `getQuotaScopedModelForProvider()`.
-- `404` sperrer bare modellen (`getModelLockKey()` avgrenser `not_found`).
+- `404` sperrer selve modellen (`getModelLockKey()` avgrenser `not_found`).
 - Enhver annen status — `5xx`-transport-/serverfeil og OmniRoutes egen
   syntetiserte `502` fra kvalitetsvalidering — sperrer bare den **eksakte**
-  kombinasjonen av leverandør/tilkobling/modell. En ugyldig strøm for én modell er ikke bevis
-  på noe om kontoens kvote. Før denne regelen fjernet ett tomt svar fra
-  `codex/gpt-5.6-luna` alle `gpt-5*`-modellene for den tilkoblingen fra
-  rutingen i 2–30 min (eskalerende), selv om kvoten var uberørt.
-- En eksplisitt `scope`-innstilling fra kalleren har alltid forrang (Antigravity sender `"exact"`).
+  kombinasjonen av leverandør/tilkobling/modell. En ugyldig strøm på én modell er ikke et bevis
+  på noe om kontoens kvote. Før denne regelen førte ett tomt svar fra
+  `codex/gpt-5.6-luna` til at alle `gpt-5*`-modeller for den aktuelle tilkoblingen ble fjernet fra
+  ruting i 2–30 min (med eskalering), selv om kvoten var uberørt.
+- Et eksplisitt `scope`-alternativ fra en oppkaller har alltid forrang (Antigravity sender `"exact"`).
 
 **Formål:** unngå å deaktivere en hel tilkobling når bare én modell er utilgjengelig eller kvotebegrenset.
 
@@ -230,7 +230,7 @@ til (`resolveLockoutScope()` i `open-sse/services/accountFallback/exactModelLock
 
 - Leverandører med kvote per modell som returnerer 429
 - Lokale leverandører som returnerer 404 for én manglende modell
-- Leverandørspesifikke tilgangsfeil for modus/modell (f.eks. Grok-moduser)
+- Leverandørspesifikke tillatelsesfeil for modus/modell (f.eks. Grok-moduser)
 
 **Implementasjon:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
@@ -238,53 +238,73 @@ til (`resolveLockoutScope()` i `open-sse/services/accountFallback/exactModelLock
 
 Brukergrensesnitt: Innstillinger → Modellnedkjøling (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Viser aktive sperringer med: leverandør, tilkobling, modell, årsak, expiresAt. Operatører kan manuelt aktivere en modell på nytt fra kortet.
+Viser aktive sperringer med: leverandør, tilkobling, modell, årsak, expiresAt. Operatører kan aktivere en modell manuelt på nytt fra kortet.
 
 **REST-API:**
 
 - `GET /api/resilience/model-cooldowns` — vis aktive sperringer
 - `DELETE /api/resilience/model-cooldowns` — manuell reaktivering. Brødtekst: `{provider, connection, model}`. Autentisering: administrasjon.
 
-### Brukergrensesnitt for sperreinnstillinger + gjenoppretting med reduksjon ved suksess (v3.8.23)
+### Nedkjølingsbehandling
 
-Modellsperring gikk fra å være en alltid aktiv, hardkodet virkemåte til en fullstendig konfigurerbar
-funksjon som må aktiveres eksplisitt, med sitt eget innstillingskort og en selvreparerende gjenopprettingsmekanisme.
+Brukergrensesnitt: Overvåking → Nedkjølingsbehandling (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Én side for alle tilkoblinger som er tatt ut av ruting av en midlertidig årsak, i stedet for
+å åpne hver leverandørside. Den viser tilkoblingsnedkjølinger, modellsperringer og terminale
+tilstander, fjerner dem per tilkobling, for et utvalg eller for alle tilkoblinger fra en leverandør,
+og redigerer de mest finjusterte nedkjølingsreglene: `streamStallCooldown.enabled` og grunnnedkjølingen
+og det maksimale antallet tilbakesprangstrinn for OAuth-/API-nøkkelens
+`connectionCooldown` (lagres via
+`PATCH /api/resilience`). Terminale tilstander (`banned`, `expired`, `credits_exhausted`) vises,
+men fjernes aldri her.
+
+**REST-API** (`src/lib/resilience/cooldownManager.ts`, autentisering: administrasjon):
+
+- `GET /api/resilience/cooldowns[?provider=]` — tilkoblinger med status, gjenværende nedkjøling,
+  tilbakesprangsnivå, siste feiltype og modellsperringer (ingen påloggingsopplysninger)
+- `POST /api/resilience/cooldowns` — brødtekst `{connectionIds: string[]}` eller
+  `{all: true, provider?}`; returnerer `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Brukergrensesnitt for sperreinnstillinger + gjenoppretting ved nedtrapping etter suksess (v3.8.23)
+
+Modellsperring gikk fra fastkodet atferd som alltid var aktivert, til en fullt konfigurerbar
+funksjon som må aktiveres eksplisitt, med et eget innstillingskort og en selvreparerende gjenopprettingsmekanisme.
 
 **Innstillingskort:** Innstillinger → Modellsperring
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Dette er **forskjellig** fra det skrivebeskyttede `ModelCooldownsCard` ovenfor (som bare
-_lister opp_ aktive sperringer) — det nye kortet _konfigurerer parameterne_. Standardverdiene
+Dette er **adskilt** fra det skrivebeskyttede `ModelCooldownsCard` ovenfor (som bare
+_viser_ aktive sperringer) — det nye kortet _konfigurerer parameterne_. Standardverdiene
 finnes i `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Innstilling             | Standard                         | Betydning                                                          |
+| Innstilling             | Standardverdi                    | Betydning                                                          |
 | ----------------------- | -------------------------------- | ------------------------------------------------------------------ |
 | `enabled`               | `false`                          | Hovedbryter — modellsperring er **av som standard**.               |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Oppstrømsstatuser som regnes som en modellspesifikk feil.          |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Oppstrømsstatuser som teller som en modellavgrenset feil.          |
 | `baseCooldownMs`        | `120_000` (120 s)                | Opprinnelig sperrevarighet for den første feilen.                  |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Øvre grense for den eskalerte nedkjølingsperioden.                 |
-| `maxBackoffSteps`       | `10`                             | Maksimalt antall eskaleringstrinn for eksponentiell tilbakegang.   |
-| `useExponentialBackoff` | `true`                           | Om gjentatte feil skal eskalere nedkjølingsperioden eksponentielt. |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Øvre grense for den eskalerte nedkjølingen.                        |
+| `maxBackoffSteps`       | `10`                             | Maksimalt antall eskaleringstrinn for eksponentielt tilbakesprang. |
+| `useExponentialBackoff` | `true`                           | Om gjentatte feil skal eskalere nedkjølingen eksponentielt.        |
 
-Innstillingene lagres gjennom det vanlige innstillingslageret og valideres via
+Innstillingene lagres via det vanlige innstillingslageret og valideres gjennom
 skjemaet for robusthetsinnstillinger. Kortet begrenser `baseCooldownMs`/`maxCooldownMs`
 (med `maxCooldownMs ≥ baseCooldownMs`) og `maxBackoffSteps`.
 
-**Gjenoppretting med reduksjon ved suksess:** gjenoppretting skjer **ikke** bare ved tidsutløp. Et vellykket
-svar reduserer modellens antall feil, slik at en modell som gjenopprettes
-midt i vinduet, slutter å eskalere (og sperringen fjernes) før tidtakeren ellers ville utløpt. For et vellykket
+**Gjenoppretting ved nedtrapping etter suksess:** gjenoppretting skjer **ikke** utelukkende ved at tidtakeren utløper. Et gyldig
+svar reduserer modellens antall feil gradvis, slik at en modell som gjenopprettes
+midt i vinduet, slutter å eskalere (og sperringen fjernes) før tidtakeren ellers ville utløpt. Ved et vellykket
 kombinasjonsmål kaller `open-sse/services/combo.ts` `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), som **halverer** den lagrede
 `failureCount` (`Math.floor(failureCount / 2)`). Når den når `0`, slettes sperreoppføringen
 fullstendig. Motstykket `recordModelLockoutFailure()`
-øker antallet (og eskalerer nedkjølingsperioden) ved feil innenfor
-eskaleringsvinduet. Denne reduksjonen ved suksess kommer i tillegg til vanlig tidsutløp —
+øker antallet (og eskalerer nedkjølingen) ved feil innenfor
+eskaleringsvinduet. Denne nedtrappingen etter suksess kommer i tillegg til vanlig utløp av tidtakeren —
 begge mekanismene kan aktivere en modell på nytt.
 
 **Tilstand:** sperringer oppbevares **i minnet** (`Map`-objekter per prosess med
 `ModelLockoutEntry`, indeksert etter `provider:connectionId:model`, og sperringer med eksakt omfang etter
-`provider:connectionId:exact:model`), og lagres ikke i
-databasen — de går tapt ved omstart. _Innstillingene_ lagres; den aktive
+`provider:connectionId:exact:model`), og lagres ikke permanent i
+databasen — de går tapt ved omstart. _Innstillingene_ lagres permanent, mens den aktive
 _sperretilstanden_ er midlertidig.
 
 ---
@@ -292,42 +312,87 @@ _sperretilstanden_ er midlertidig.
 ## 4. Samtidighetskontroll for kvotedeling (v3.8.36)
 
 Abonnementskontoer (GLM, MiniMax osv.) godtar ofte bare ~1–3 samtidige
-forespørsler. Hvis dette overskrides, utløses 429-feil og nedkjølingsperioder. Dette er særlig merkbart med
+forespørsler. Overskridelse av dette utløser 429-feil og nedkjølingsperioder. Dette er spesielt merkbart med
 **kvotedelingskombinasjoner** (`qtSd/…`), der flere API-nøkler deler én oppstrømskonto.
-Tre lag hindrer at en delt konto overbelastes.
+Tre lag hindrer at en delt konto oversvømmes.
 
-### Samtidighetsgrense per tilkobling (`max_concurrent`)
+### Samtidighetstak per tilkobling (`max_concurrent`)
 
-Hver leverandørtilkobling kan angi en øvre grense for `max_concurrent`
+Hver leverandørtilkobling kan angi et `max_concurrent`-tak
 (`provider_connections.max_concurrent`, angitt i dialogboksen for tilkoblingen / API-et / databasen).
 La feltet stå tomt for ingen grense. Dette er den eneste innstillingen som styrer serialiseringslaget
-nedenfor — sett den til kontoens reelle samtidighet (f.eks. GLM ~1, MiniMax ~2).
+nedenfor — sett den til kontoens faktiske samtidighet (f.eks. GLM ~1, MiniMax ~2).
 
-### Serialisering av forespørsler ved kvotedeling
+### Samtidighetstak per modell (`modelConcurrency`)
 
-Når en kvotedelingsdistribusjon målrettes mot en tilkobling som angir en positiv
-`max_concurrent`, serialiseres samtidige forespørsler til denne **kontoen** gjennom en
+En tilkobling kan i tillegg angi nøyaktige samtidighetstak per modell
+i sitt `rateLimitOverrides`-kart:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Angi dette i dialogboksen for tilkoblingen (**Overstyringer av hastighetsgrenser → Samtidighetstak per
+modell**, én `model=cap` per linje) eller via
+`PATCH /api/providers/[id]` med samme JSON-struktur. Semantikk for nøkler:
+
+- **Tilkoblingsomfattende kontra modellspesifikt:** `maxConcurrent` er fortsatt det delte
+  tilkoblingsomfattende taket. Når begge gjelder, innhentes begge sperrene
+  atomisk i den samme sammensatte sperren
+  (`global → provider → account → model`); den strengeste gjeldende grensen
+  avgjør den faktiske virkemåten.
+- **Nøyaktig samsvar med modellnøkkelen:** nøkkelen er modellstrengen som sendes til
+  eksekveringsmotoren etter at rutingen er løst — normalt den rene oppstrøms modell-ID-en
+  (`glm-5`), ikke et `provider/model`-alias på klientsiden (`zai/glm-5` samsvarer ikke
+  med `glm-5`). Verdiene er positive heltallstak for samtidige forespørsler.
+- **Lokal kølegging, ingen automatisk oppdagelse:** overskytende forespørsler legges i lokal kø med
+  eksisterende kø-/tidsavbruddssemantikk (typede innslippsfeil av typen `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute oppdager eller utleder ikke oppstrømsregler
+  — det håndhever nøyaktig de takene operatøren har konfigurert. En mettet modellsperre
+  deaktiverer aldri leverandøren og oppretter aldri en permanent modellutestengelse.
+  Oppstrøms 429-/nedkjølings-/reserveløsningatferd forblir siste feilhåndtering.
+- **Omfang per tilkobling og per prosess:** takene gjelder per databasetilkobling
+  og lagres i minnet, så to tilkoblinger som gjenbruker den samme oppstrøms API-nøkkelen,
+  koordineres ikke med hverandre.
+- **Ikke konfigurert betyr uendret:** å utelate kartet (eller la feltet i
+  kontrollpanelet stå tomt) legger ikke til noen modellsperre. Eksempelkonfigurasjon uten
+  å hevde noen universell leverandørgrense:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Serialisering av kvotedelingsforespørsler
+
+Når en kvotedelingsdispatch er rettet mot en tilkobling som angir en positiv
+`max_concurrent`, serialiseres samtidige forespørsler til den aktuelle **kontoen** gjennom en
 semafor per tilkobling (nøkkel `qsconn:<connectionId>`): overskytende forespørsler **venter i
-køen** i stedet for å overbelaste kontoen. Mekanismen er **fail-open** — ved full
-kø eller tidsavbrudd fortsetter den uten en plass fremfor å avvise en forespørsel
-som kan distribueres. Slå funksjonen av eller på under **Innstillinger → Robusthet → Samtidighet
-per tilkobling for kvotedeling** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, aktivert
-som standard). Uten en `max_concurrent`-grense er virkemåten uendret.
+køen** i stedet for å oversvømme kontoen. Den er **fail-open** — en mettet
+kø eller et tidsavbrudd fortsetter uten en plass fremfor noen gang å avvise en forespørsel
+som kan videresendes. Slå dette av eller på under **Innstillinger → Robusthet → Samtidighet per tilkobling
+for kvotedeling** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, aktivert
+som standard). Uten et `max_concurrent`-tak er virkemåten uendret.
 
-> Rutingporten for kvotedeling (`selectQuotaShareTarget`, DRR + P2C) er selv
-> fail-open og bare _nedprioriterer_ en tilkobling som har nådd grensen — med en
+> Rutingssperren for kvotedeling (`selectQuotaShareTarget`, DRR + P2C) er selv
+> fail-open og bare _nedprioriterer_ en tilkobling som har nådd taket — med en
 > pool med én tilkobling kan den ikke håndheve en absolutt grense, så det er denne semaforen som faktisk
-> begrenser flommen.
+> begrenser oversvømmelsen.
 
-### Nytt forsøk som tar hensyn til kombinasjonens nedkjøling
+### Nedkjølingsbevisst nytt forsøk for kombinasjoner
 
 For hver kombinasjonsstrategi (når aktivert) vil en forespørsel som ellers ville resultert i en 429-feil
-på grunn av en KORT, midlertidig nedkjøling, vente til den er over og distribueres på nytt i stedet for
-å returnere 429-feilen — dette dekker TPM/RPM-vinduer i Gemini-klassen (~60s retry-after)
-for kombinasjoner med flere modeller, for eksempel når begge målene i en kombinasjon med to modeller
-treffer en hastighetsgrense per modell. Begrenses av `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) under **Innstillinger → Robusthet**. Den venter aldri ved `quota_exhausted`
-(låst frem til midnatt) eller årsaker knyttet til autentisering/ikke funnet.
+på grunn av en KORT midlertidig nedkjølingsperiode, vente den ut og videresendes på nytt i stedet for
+å returnere 429-feilen — dette dekker TPM-/RPM-vinduer i Gemini-klassen (~60s retry-after)
+for kombinasjoner med flere modeller, f.eks. når begge målene i en kombinasjon med to modeller treffer en hastighetsgrense
+per modell. Begrenses av `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) under **Innstillinger → Robusthet**. Den venter aldri på `quota_exhausted`
+(låst til midnatt) eller årsaker knyttet til autentisering/ikke funnet.
 
 ---
 

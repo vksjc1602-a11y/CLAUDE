@@ -205,25 +205,23 @@ Olağan yönlendirmede uygun yönetilen adaylar bulunmasına rağmen tüm boş a
 
 **Kapsam:** sağlayıcı + bağlantı + model üçlüsü.
 
-**Duruma göre anahtar kapsamı:** başarısızlık durumu, kilitlemenin hangi anahtara
-yazılacağını belirler (`open-sse/services/accountFallback/exactModelLock.ts`
-içindeki `resolveLockoutScope()`):
+**Duruma göre anahtar kapsamı:** kilitlemenin hangi anahtara yazılacağını hatalı durum
+belirler (`open-sse/services/accountFallback/exactModelLock.ts` içindeki `resolveLockoutScope()`):
 
 - `429` / `403` / `402` — kota veya yetkilendirme sinyali — **kota ailesini** kilitler:
-  codex için bağlantının tüm `codex` / `spark` kapsamı (bağlantıdaki her
-  `gpt-5*` modeli), diğer sağlayıcılar için `getQuotaScopedModelForProvider()`.
+  codex için bağlantının tüm `codex` / `spark` kapsamını (bağlantıdaki her `gpt-5*`
+  modeli), diğer sağlayıcılar için `getQuotaScopedModelForProvider()`.
 - `404`, yalın modeli kilitler (`getModelLockKey()`, `not_found` kapsamını daraltır).
 - Diğer tüm durumlar — `5xx` aktarım/sunucu hataları ve OmniRoute'un kalite
-  doğrulamasından kaynaklanan, kendi oluşturduğu `502` — yalnızca **tam**
-  sağlayıcı/bağlantı/model üçlüsünü kilitler. Bir modeldeki bozuk akış, hesabın
-  kotası hakkında kanıt değildir; bu kuraldan önce `codex/gpt-5.6-luna`
-  üzerindeki tek bir boş yanıt, kotasına dokunulmamış olmasına rağmen o
-  bağlantının tüm `gpt-5*` modellerini 2–30 dakikalığına (giderek artacak şekilde)
-  yönlendirmeden çıkarıyordu.
-- Çağıranın açık `scope` seçeneği her zaman önceliklidir (Antigravity `"exact"`
-  iletir).
+  doğrulamasından kaynaklanan kendi sentezlenmiş `502` durumu — yalnızca **tam**
+  sağlayıcı/bağlantı/model üçlüsünü kilitler. Bir modeldeki hatalı akış, hesabın
+  kotası hakkında kanıt değildir; bu kuraldan önce `codex/gpt-5.6-luna` üzerindeki
+  tek bir boş yanıt, kotaya dokunulmamış olmasına rağmen o bağlantının tüm
+  `gpt-5*` modellerini 2–30 dakika boyunca (giderek artan şekilde) yönlendirmeden
+  çıkarıyordu.
+- Çağıranın açık `scope` seçeneği her zaman önceliklidir (Antigravity `"exact"` iletir).
 
-**Amaç:** yalnızca tek bir model kullanılamadığında veya kota sınırına takıldığında bağlantının tamamını devre dışı bırakmaktan kaçınmak.
+**Amaç:** yalnızca bir model kullanılamadığında veya kota sınırına takıldığında bağlantının tamamını devre dışı bırakmaktan kaçınmak.
 
 **Örnekler:**
 
@@ -235,7 +233,7 @@ içindeki `resolveLockoutScope()`):
 
 ### Model Bekleme Süreleri Panosu (v3.8.0)
 
-Kullanıcı arayüzü: Ayarlar → Model Bekleme Süreleri (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Arayüz: Ayarlar → Model Bekleme Süreleri (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
 Etkin kilitlemeleri şu bilgilerle listeler: sağlayıcı, bağlantı, model, neden, expiresAt. Operatörler kart üzerinden bir modeli manuel olarak yeniden etkinleştirebilir.
 
@@ -244,97 +242,161 @@ Etkin kilitlemeleri şu bilgilerle listeler: sağlayıcı, bağlantı, model, ne
 - `GET /api/resilience/model-cooldowns` — etkin kilitlemeleri listeler
 - `DELETE /api/resilience/model-cooldowns` — manuel olarak yeniden etkinleştirir. Gövde: `{provider, connection, model}`. Kimlik doğrulama: yönetim.
 
-### Kilitleme ayarları kullanıcı arayüzü + başarıyla azalan kurtarma (v3.8.23)
+### Bekleme Süresi Yöneticisi
 
-Model kilitleme, her zaman etkin olan sabit kodlanmış bir davranıştan, kendi
-ayar kartına ve kendi kendini iyileştiren kurtarma yoluna sahip, tamamen
-yapılandırılabilir ve isteğe bağlı bir özelliğe dönüştü.
+Arayüz: İzleme → Bekleme Süresi Yöneticisi (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Her sağlayıcı sayfasını açmak yerine, geçici bir nedenle yönlendirme dışında kalan
+her bağlantı için tek bir sayfa sunar. Bağlantı bekleme sürelerini, model kilitlemelerini
+ve terminal durumlarını listeler; bunları bağlantı başına, bir seçim için veya bir
+sağlayıcının tüm bağlantıları için temizler ve en çok ayarlanan bekleme süresi kurallarını
+düzenler: `streamStallCooldown.enabled` ile OAuth / API anahtarı `connectionCooldown`
+temel bekleme süresi ve maksimum geri çekilme adımları (`PATCH /api/resilience`
+üzerinden kaydedilir). Terminal durumlar (`banned`, `expired`, `credits_exhausted`)
+listelenir ancak burada hiçbir zaman temizlenmez.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, kimlik doğrulama: yönetim):
+
+- `GET /api/resilience/cooldowns[?provider=]` — durum, kalan bekleme süresi,
+  geri çekilme düzeyi, son hata türü ve model kilitlemeleriyle birlikte bağlantılar (kimlik bilgileri olmadan)
+- `POST /api/resilience/cooldowns` — gövde `{connectionIds: string[]}` veya
+  `{all: true, provider?}`; `{cleared, unchanged, skippedTerminal, lockoutsCleared}` döndürür
+
+### Kilitleme ayarları arayüzü + başarıyla azalan kurtarma (v3.8.23)
+
+Model kilitleme, her zaman açık ve sabit kodlanmış bir davranış olmaktan çıkarılarak
+kendi ayarlar kartına ve kendi kendini iyileştiren bir kurtarma yoluna sahip, tamamen
+yapılandırılabilir ve isteğe bağlı bir özellik hâline getirildi.
 
 **Ayarlar kartı:** Ayarlar → Model Kilitleme
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
 Bu kart, yukarıdaki salt okunur `ModelCooldownsCard` kartından (yalnızca etkin
-kilitlemeleri _listeler_) **farklıdır** — yeni kart _parametreleri yapılandırır_.
-Varsayılanlar `DEFAULT_MODEL_LOCKOUT_SETTINGS` içinde bulunur
-(`src/lib/resilience/modelLockoutSettings.ts`):
+kilitlemeleri _listeler_) **farklıdır** — yeni kart _parametreleri yapılandırır_. Varsayılanlar
+`DEFAULT_MODEL_LOCKOUT_SETTINGS`
+(`src/lib/resilience/modelLockoutSettings.ts`) içinde bulunur:
 
 | Ayar                    | Varsayılan                       | Anlamı                                                                     |
 | ----------------------- | -------------------------------- | -------------------------------------------------------------------------- |
 | `enabled`               | `false`                          | Ana anahtar — model kilitleme **varsayılan olarak kapalıdır**.             |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model kapsamlı hata sayılan üst akış durumları.                            |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Model kapsamlı hata olarak sayılan yukarı akış durumları.                  |
 | `baseCooldownMs`        | `120_000` (120 sn)               | İlk hata için başlangıç kilitleme süresi.                                  |
 | `maxCooldownMs`         | `1_800_000` (30 dk)              | Artırılmış bekleme süresinin üst sınırı.                                   |
-| `maxBackoffSteps`       | `10`                             | Azami üstel geri çekilme artış adımı sayısı.                               |
+| `maxBackoffSteps`       | `10`                             | Maksimum üstel geri çekilme artış adımı sayısı.                            |
 | `useExponentialBackoff` | `true`                           | Tekrarlanan hataların bekleme süresini üstel olarak artırıp artırmayacağı. |
 
-Ayarlar normal ayar deposu aracılığıyla kalıcı hale getirilir ve dayanıklılık
+Ayarlar normal ayarlar deposu aracılığıyla kalıcı hâle getirilir ve dayanıklılık
 ayarları şeması üzerinden doğrulanır; kart `baseCooldownMs`/`maxCooldownMs`
-değerlerini (`maxCooldownMs ≥ baseCooldownMs` olacak şekilde) ve
-`maxBackoffSteps` değerini sınırlar.
+değerlerini (`maxCooldownMs ≥ baseCooldownMs` olacak şekilde) ve `maxBackoffSteps`
+değerini sınırlar.
 
-**Başarıyla azalan kurtarma:** kurtarma **yalnızca** zamanlayıcının süresinin
-dolmasına bağlı değildir. Sağlıklı bir yanıt, modelin hata sayısını azaltır;
-böylece pencerenin ortasında kurtarılan modelin artışı durur (ve kilitleme
-kaldırılır), bu işlem zamanlayıcının süresi dolmadan gerçekleşir. Başarılı bir
-birleşik hedefte `open-sse/services/combo.ts`, `decayModelFailureCount()`
-fonksiyonunu (`open-sse/services/accountFallback.ts`) çağırır; bu fonksiyon,
-depolanan `failureCount` değerini **yarıya indirir**
-(`Math.floor(failureCount / 2)`); değer `0` olduğunda kilitleme girdisi tamamen
-silinir. Karşılık gelen `recordModelLockoutFailure()`, artış penceresi içindeki
-hatalarda sayacı artırır (ve bekleme süresini yükseltir). Bu başarıyla azalma,
-normal zamanlayıcı süresinin dolmasına ek olarak işler — her iki yol da modeli
-yeniden etkinleştirebilir.
+**Başarıyla azalan kurtarma:** kurtarma **yalnızca** zamanlayıcının sona ermesine
+bağlı değildir. Sağlıklı bir yanıt, modelin hata sayısını kademeli olarak azaltır;
+böylece pencerenin ortasında kurtarılan bir model, zamanlayıcısı sona ermeden önce
+artmayı durdurur (ve temizlenir). Başarılı bir birleşik hedefte
+`open-sse/services/combo.ts`, `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`) işlevini çağırır; bu işlev saklanan
+`failureCount` değerini **yarıya indirir** (`Math.floor(failureCount / 2)`); değer
+`0` olduğunda kilitleme girdisi tamamen silinir. Karşılık gelen
+`recordModelLockoutFailure()`, artış penceresi içindeki hatalarda sayıyı artırır
+(ve bekleme süresini yükseltir). Başarıyla azalma, normal zamanlayıcı sona ermesine
+ek olarak uygulanır — her iki yol da bir modeli yeniden etkinleştirebilir.
 
-**Durum:** kilitlemeler DB'de kalıcı hale getirilmez; **bellekte**
-(`provider:connectionId:model` anahtarlı süreç başına `ModelLockoutEntry`
-`Map`leri, `provider:connectionId:exact:model` anahtarlı tam kapsamlı kilitler)
-tutulur — yeniden başlatıldığında kaybolurlar. _Ayarlar_ kalıcıdır; etkin
-kilitleme _durumu_ geçicidir.
+**Durum:** kilitlemeler DB'de kalıcı olarak saklanmaz; **bellekte**
+(`provider:connectionId:model` ile anahtarlanan işlem başına `ModelLockoutEntry`
+`Map`'leri, `provider:connectionId:exact:model` ile anahtarlanan tam kapsamlı
+kilitler) tutulur — yeniden başlatma sırasında kaybolurlar. _Ayarlar_ kalıcı olarak
+saklanır; etkin kilitleme _durumu_ geçicidir.
 
 ---
 
-## 4. Kota Paylaşımı Eşzamanlılık Kontrolü (v3.8.36)
+## 4. Kota Paylaşımı Eşzamanlılık Denetimi (v3.8.36)
 
 Abonelik hesapları (GLM, MiniMax vb.) genellikle yalnızca ~1–3 eşzamanlı
 isteği kabul eder; bu sınırın aşılması 429 yanıtlarını ve bekleme sürelerini tetikler. Bu durum,
-birden fazla API anahtarının tek bir üst sağlayıcı hesabını paylaştığı
+birden fazla API anahtarının aynı yukarı akış hesabını paylaştığı
 **kota paylaşımı** (`qtSd/…`) kombinasyonlarında özellikle belirgindir. Üç katman, paylaşılan bir hesabın
 istek akınına uğramasını önler.
 
 ### Bağlantı başına eşzamanlılık sınırı (`max_concurrent`)
 
 Her sağlayıcı bağlantısı bir `max_concurrent` üst sınırı tanımlayabilir
-(`provider_connections.max_concurrent`, bağlantı penceresi / API / DB üzerinden ayarlanır).
-Sınırsız olması için boş bırakın. Bu, aşağıdaki serileştirme katmanını yöneten
-tek ayardır; bunu hesabın gerçek eşzamanlılık değerine ayarlayın (ör. GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`; bağlantı iletişim kutusu / API / DB üzerinden ayarlanır).
+Sınır olmaması için boş bırakın. Bu, aşağıdaki serileştirme katmanını yöneten tek ayardır
+— hesabın gerçek eşzamanlılık değerine ayarlayın (ör. GLM ~1, MiniMax ~2).
+
+### Model başına eşzamanlılık sınırları (`modelConcurrency`)
+
+Bir bağlantı ayrıca `rateLimitOverrides` eşlemesi içinde model başına kesin
+eşzamanlılık üst sınırları tanımlayabilir:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Bunu bağlantı iletişim kutusunda (**Hız sınırı geçersiz kılmaları → Model başına
+eşzamanlılık sınırları**, her satırda bir `model=cap`) veya aynı JSON yapısıyla
+`PATCH /api/providers/[id]` üzerinden ayarlayın. Anahtar semantiği:
+
+- **Bağlantı geneli ile modele özgü karşılaştırması:** `maxConcurrent`, paylaşılan
+  bağlantı geneli üst sınırı olmaya devam eder. Her ikisi de geçerli olduğunda, iki geçit de
+  aynı bileşik geçit içinde atomik olarak edinilir
+  (`global → provider → account → model`); etkin davranışı, geçerli sınırlar
+  arasından daha katı olanı belirler.
+- **Tam model anahtarı eşleşmesi:** anahtar, yönlendirme çözümlemesinden sonra
+  yürütücüye aktarılan model dizesidir — normalde istemci tarafındaki
+  `provider/model` diğer adı değil (`zai/glm-5`, `glm-5` ile
+  eşleşmez), yukarı akışın yalın model kimliğidir (`glm-5`). Değerler, pozitif tam sayı
+  biçiminde eşzamanlı istek üst sınırlarıdır.
+- **Yerel kuyruklama, keşif yok:** fazla istekler mevcut
+  kuyruk/zaman aşımı semantiğiyle yerel olarak kuyruğa alınır (türlü `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` kabul hataları). OmniRoute, yukarı akış politikasını keşfetmez veya
+  çıkarım yoluyla belirlemez — operatörün yapılandırdığı kesin üst sınırları
+  uygular. Doymuş bir model geçidi sağlayıcıyı hiçbir zaman devre dışı bırakmaz ve
+  kalıcı bir model kilitlenmesi oluşturmaz; yukarı akış 429/bekleme süresi/yedek sisteme geçiş davranışı,
+  hatalara karşı son güvence olmaya devam eder.
+- **Bağlantı başına, işlem başına kapsam:** sınırlar veritabanı bağlantısı başınadır
+  ve bellekte tutulur; bu nedenle aynı yukarı akış API anahtarını yeniden kullanan iki bağlantı
+  birbiriyle koordinasyon sağlamaz.
+- **Yapılandırılmamış olması değişiklik olmadığı anlamına gelir:** eşlemenin atlanması (veya
+  pano alanının boş bırakılması) herhangi bir model geçidi eklemez. Evrensel bir sağlayıcı
+  sınırı öne sürmeyen örnek yapılandırma:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Kota paylaşımı istek serileştirmesi
 
-Bir kota paylaşımı yönlendirmesi, pozitif bir `max_concurrent` değeri tanımlayan
-bir bağlantıyı hedeflediğinde, o **hesaba** yönelik eşzamanlı istekler bağlantı başına
-bir semafor (`qsconn:<connectionId>` anahtarı) üzerinden serileştirilir: fazla istekler
-hesabı istek akınına uğratmak yerine **kuyrukta bekler**. Bu mekanizma **hata durumunda açık**
-çalışır; dolu bir kuyruk veya zaman aşımı, yönlendirilebilir bir isteği reddetmek yerine
-slot olmadan devam eder. **Ayarlar → Dayanıklılık → Kota paylaşımı bağlantı başına
-eşzamanlılık** bölümünden açıp kapatabilirsiniz
-(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, varsayılan olarak
-açıktır). `max_concurrent` sınırı olmadığında davranış değişmez.
+Bir kota paylaşımı dağıtımı, pozitif bir `max_concurrent` değeri tanımlayan
+bir bağlantıyı hedeflediğinde, söz konusu **hesaba** yönelik eşzamanlı istekler
+bağlantı başına bir semafor (`qsconn:<connectionId>` anahtarı) üzerinden serileştirilir: fazla istekler
+hesaba akın etmek yerine **kuyrukta bekler**. Sistem **hata durumunda açık** çalışır — doymuş bir
+kuyruk veya zaman aşımı, dağıtılabilir bir isteği reddetmek yerine slot olmadan devam eder.
+**Ayarlar → Dayanıklılık → Kota paylaşımı bağlantı başına
+eşzamanlılık** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, varsayılan olarak
+açık) bölümünden açıp kapatın. `max_concurrent` sınırı olmadan davranış değişmez.
 
-> Kota paylaşımı yönlendirme geçidi (`selectQuotaShareTarget`, DRR + P2C) de
-> hata durumunda açık çalışır ve sınırına ulaşmış bir bağlantının yalnızca _önceliğini düşürür_;
-> tek bağlantılı bir havuzda katı bir sınır uygulayamaz, dolayısıyla istek akınını gerçekten
-> kontrol altında tutan mekanizma bu semafordur.
+> Kota paylaşımı yönlendirme geçidi (`selectQuotaShareTarget`, DRR + P2C) kendi başına
+> hata durumunda açıktır ve sınırına ulaşmış bir bağlantının yalnızca _önceliğini düşürür_ —
+> tek bağlantılı bir havuzda kesin sınır uygulayamaz; dolayısıyla istek akınını fiilen
+> kontrol altında tutan bu semafordur.
 
-### Kombinasyon bekleme süresini dikkate alan yeniden deneme
+### Kombinasyonlar için bekleme süresine duyarlı yeniden deneme
 
-Her kombinasyon stratejisinde (etkinleştirildiğinde), KISA süreli geçici bir bekleme
-nedeniyle kesinleşmiş bir 429 yanıtına yol açacak istek, 429 döndürmek yerine
-bekleme süresinin dolmasını bekler ve yeniden yönlendirilir; bu, çok modelli
-kombinasyonlardaki Gemini sınıfı TPM/RPM pencerelerini (~60 sn. retry-after) kapsar;
-örneğin 2 modelli bir kombinasyonun her iki hedefi de model başına hız sınırına
-ulaştığında. **Ayarlar → Dayanıklılık** bölümündeki `comboCooldownWait`
-(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) ile sınırlandırılır.
-`quota_exhausted` (gece yarısına kadar kilitli) veya kimlik doğrulama/bulunamadı
-nedenlerinde hiçbir zaman beklemez.
+Her kombinasyon stratejisinde (etkinleştirildiğinde), KISA süreli geçici bir bekleme dönemi için
+429 yanıtını kesinleştirecek bir istek, 429 yanıtını döndürmek yerine sürenin dolmasını bekler ve
+yeniden dağıtılır — bu, çok modelli kombinasyonlardaki Gemini sınıfı TPM/RPM pencerelerini
+(~60 sn. retry-after), örneğin 2 modelli bir kombinasyonun her iki hedefinin de model başına
+hız sınırına ulaşmasını kapsar. **Ayarlar → Dayanıklılık** bölümündeki
+`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) ile sınırlandırılır. `quota_exhausted` (gece yarısına kadar kilitli)
+veya kimlik doğrulama/bulunamadı nedenlerinde hiçbir zaman beklemez.
 
 ---
 

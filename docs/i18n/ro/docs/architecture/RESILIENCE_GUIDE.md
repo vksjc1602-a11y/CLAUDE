@@ -205,21 +205,21 @@ Mecanismele asociate rămân separate:
 
 ## 3. Blocarea modelului
 
-**Domeniu:** tripleta furnizor + conexiune + model.
+**Domeniu de aplicare:** tripleta furnizor + conexiune + model.
 
-**Domeniul cheii în funcție de stare:** starea care indică eroarea determină cheia pentru care este scrisă o blocare
-(`resolveLockoutScope()` din `open-sse/services/accountFallback/exactModelLock.ts`):
+**Domeniul cheii în funcție de stare:** starea care indică eroarea decide în ce cheie este scrisă blocarea
+(prin `resolveLockoutScope()` din `open-sse/services/accountFallback/exactModelLock.ts`):
 
 - `429` / `403` / `402` — un semnal privind cota sau drepturile de acces — blochează **familia de cote**:
   pentru codex, întregul domeniu `codex` / `spark` (fiecare model `gpt-5*` al
   conexiunii), iar pentru alți furnizori, `getQuotaScopedModelForProvider()`.
 - `404` blochează modelul propriu-zis (`getModelLockKey()` restrânge `not_found`).
-- Orice altă stare — erori de transport/server `5xx` și răspunsul `502` sintetizat
-  chiar de OmniRoute în urma validării calității — blochează numai tuplul **exact**
-  furnizor/conexiune/model. Un flux defect pentru un model nu reprezintă o dovadă
+- Orice altă stare — erorile de transport/server `5xx` și răspunsul `502` sintetizat
+  intern de OmniRoute în urma validării calității — blochează numai tripleta **exactă**
+  furnizor/conexiune/model. Un flux defectuos pentru un model nu reprezintă o dovadă
   privind cota contului; înaintea acestei reguli, un singur răspuns gol de la
-  `codex/gpt-5.6-luna` elimina de la rutare fiecare model `gpt-5*` al conexiunii
-  timp de 2–30 min (cu escaladare), deși cota sa nu fusese afectată.
+  `codex/gpt-5.6-luna` elimina fiecare model `gpt-5*` al conexiunii respective din
+  rutare timp de 2–30 min (cu escaladare), deși cota sa nu era afectată.
 - Opțiunea explicită `scope` a apelantului are întotdeauna prioritate (Antigravity transmite `"exact"`).
 
 **Scop:** evitarea dezactivării unei conexiuni întregi atunci când numai un model este indisponibil sau limitat de cotă.
@@ -227,106 +227,169 @@ Mecanismele asociate rămân separate:
 **Exemple:**
 
 - Furnizori cu cote per model care returnează 429
-- Furnizori locali care returnează 404 pentru un singur model absent
-- Erori de permisiune specifice furnizorului pentru mod/model (de exemplu, modurile Grok)
+- Furnizori locali care returnează 404 pentru un singur model lipsă
+- Erori privind permisiunile pentru moduri/modele specifice furnizorului (de exemplu, modurile Grok)
 
 **Implementare:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Panoul perioadelor de suspendare a modelelor (v3.8.0)
+### Panoul perioadelor de așteptare pentru modele (v3.8.0)
 
-Interfață: Setări → Perioade de suspendare a modelelor (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
+Interfață: Setări → Perioade de așteptare pentru modele (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Listează blocările active împreună cu: furnizorul, conexiunea, modelul, reason, expiresAt. Operatorii pot reactiva manual un model din card.
+Afișează blocările active împreună cu: furnizorul, conexiunea, modelul, motivul și expiresAt. Operatorii pot reactiva manual un model din card.
 
 **API REST:**
 
 - `GET /api/resilience/model-cooldowns` — listează blocările active
-- `DELETE /api/resilience/model-cooldowns` — reactivare manuală. Corp: `{provider, connection, model}`. Autentificare: administrare.
+- `DELETE /api/resilience/model-cooldowns` — reactivare manuală. Corp: `{provider, connection, model}`. Autentificare: management.
 
-### Interfața pentru setările de blocare + recuperarea prin atenuare la succes (v3.8.23)
+### Managerul perioadelor de așteptare
 
-Blocarea modelelor a trecut de la un comportament codificat rigid și permanent activ la o
-funcționalitate complet configurabilă, opțională, cu propriul card de setări și o cale
-de recuperare cu autoremediere.
+Interfață: Monitorizare → Managerul perioadelor de așteptare (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Card de setări:** Setări → Blocarea modelului
+O singură pagină pentru fiecare conexiune exclusă din rutare dintr-un motiv temporar, în locul
+deschiderii paginii fiecărui furnizor. Aceasta listează perioadele de așteptare ale conexiunilor, blocările modelelor și stările
+terminale, le elimină per conexiune, pentru o selecție sau pentru toate conexiunile unui furnizor
+și editează regulile cel mai frecvent ajustate pentru perioadele de așteptare: `streamStallCooldown.enabled` și
+perioada de așteptare de bază `connectionCooldown` pentru OAuth / cheia API, precum și numărul maxim de pași de backoff (salvate prin
+`PATCH /api/resilience`). Stările terminale (`banned`, `expired`, `credits_exhausted`) sunt
+afișate, dar nu sunt eliminate niciodată aici.
+
+**API REST** (`src/lib/resilience/cooldownManager.ts`, autentificare: management):
+
+- `GET /api/resilience/cooldowns[?provider=]` — conexiuni împreună cu starea, perioada de așteptare rămasă,
+  nivelul de backoff, ultimul tip de eroare și blocările modelelor (fără credențiale)
+- `POST /api/resilience/cooldowns` — corp `{connectionIds: string[]}` sau
+  `{all: true, provider?}`; returnează `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Interfața setărilor de blocare + recuperarea prin diminuare la succes (v3.8.23)
+
+Blocarea modelelor a trecut de la un comportament permanent activ, codificat rigid, la o funcționalitate
+complet configurabilă, cu activare explicită, propriul card de setări și un mecanism de recuperare cu autoremediere.
+
+**Card de setări:** Setări → Blocarea modelelor
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Acesta este **distinct** de `ModelCooldownsCard`, disponibil doar pentru citire, de mai sus (care doar
+Acesta este **distinct** de `ModelCooldownsCard` numai pentru citire de mai sus (care doar
 _listează_ blocările active) — noul card _configurează parametrii_. Valorile implicite
 se află în `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Setare                  | Valoare implicită                | Semnificație                                                            |
-| ----------------------- | -------------------------------- | ----------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Comutator principal — blocarea modelelor este **dezactivată implicit**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stări din amonte care sunt considerate erori la nivel de model.         |
-| `baseCooldownMs`        | `120_000` (120 s)                | Durata inițială a blocării pentru prima eroare.                         |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Limita superioară a perioadei de suspendare escalate.                   |
-| `maxBackoffSteps`       | `10`                             | Numărul maxim de pași de escaladare prin temporizare exponențială.      |
-| `useExponentialBackoff` | `true`                           | Dacă erorile repetate escaladează exponențial perioada de suspendare.   |
+| Setare                  | Valoare implicită                | Semnificație                                                                   |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `enabled`               | `false`                          | Comutator principal — blocarea modelelor este **dezactivată în mod implicit**. |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Stări upstream considerate erori limitate la nivel de model.                   |
+| `baseCooldownMs`        | `120_000` (120 s)                | Durata inițială a blocării pentru prima eroare.                                |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Limita superioară a perioadei de așteptare escaladate.                         |
+| `maxBackoffSteps`       | `10`                             | Numărul maxim de pași de escaladare exponențială a backoff-ului.               |
+| `useExponentialBackoff` | `true`                           | Dacă erorile repetate escaladează exponențial perioada de așteptare.           |
 
-Setările sunt persistate prin mecanismul obișnuit de stocare a setărilor și validate prin
+Setările sunt păstrate prin depozitul obișnuit de setări și validate prin
 schema setărilor de reziliență; cardul limitează `baseCooldownMs`/`maxCooldownMs`
 (cu `maxCooldownMs ≥ baseCooldownMs`) și `maxBackoffSteps`.
 
-**Recuperare prin atenuare la succes:** recuperarea **nu** se bazează exclusiv pe expirarea temporizatorului. Un răspuns
-valid reduce treptat numărul de erori ale modelului, astfel încât un model care s-a recuperat
+**Recuperare prin diminuare la succes:** recuperarea **nu** se bazează exclusiv pe expirarea temporizatorului. Un răspuns
+valid reduce treptat numărul de erori al modelului, astfel încât un model care și-a revenit
 în timpul intervalului să nu mai escaladeze (și să fie deblocat) înainte de expirarea temporizatorului. Pentru o țintă
-combinată care a reușit, `open-sse/services/combo.ts` apelează `decayModelFailureCount()`
+combinată care răspunde cu succes, `open-sse/services/combo.ts` apelează `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), care **înjumătățește** valoarea stocată
 `failureCount` (`Math.floor(failureCount / 2)`); când aceasta ajunge la `0`, intrarea de blocare
-este ștearsă complet. Funcția corespondentă `recordModelLockoutFailure()`
-incrementează contorul (și escaladează perioada de suspendare) pentru erorile produse în
-intervalul de escaladare. Această atenuare la succes se adaugă expirării obișnuite a temporizatorului —
-oricare dintre cele două căi poate reactiva un model.
+este ștearsă complet. Funcția complementară `recordModelLockoutFailure()`
+incrementează numărul (și escaladează perioada de așteptare) pentru erorile survenite în
+intervalul de escaladare. Această diminuare la succes se adaugă simplei expirări a temporizatorului —
+oricare dintre cele două mecanisme poate reactiva un model.
 
 **Stare:** blocările sunt păstrate **în memorie** (`Map`-uri per proces cu
 `ModelLockoutEntry`, indexate după `provider:connectionId:model`, iar blocările cu domeniu exact după
-`provider:connectionId:exact:model`), fără a fi persistate în
-baza de date — se pierd la repornire. _Setările_ sunt persistate; _starea_ blocărilor
-active este efemeră.
+`provider:connectionId:exact:model`), nu sunt persistate în
+baza de date — se pierd la repornire. _Setările_ sunt persistate; _starea_ blocărilor active este efemeră.
 
 ---
 
-## 4. Controlul concurenței pentru partajarea cotei (v3.8.36)
+## 4. Controlul concurenței pentru Quota-Share (v3.8.36)
 
-Conturile cu abonament (GLM, MiniMax etc.) acceptă adesea numai aproximativ 1–3
-solicitări concurente; depășirea acestei limite declanșează erori 429 și perioade de pauză. Problema este acută în cazul
-combinațiilor de tip **quota-share** (`qtSd/…`), unde mai multe chei API partajează același cont
-din amonte. Trei niveluri împiedică supraîncărcarea unui cont partajat.
+Conturile cu abonament (GLM, MiniMax etc.) acceptă adesea doar ~1–3 solicitări
+concurente; depășirea acestei limite declanșează răspunsuri 429 și perioade de așteptare. Acest lucru este critic în cazul
+combinațiilor **quota-share** (`qtSd/…`), unde mai multe chei API folosesc în comun același
+cont upstream. Trei niveluri împiedică supraîncărcarea unui cont partajat.
 
 ### Limită de concurență per conexiune (`max_concurrent`)
 
-Fiecare conexiune la furnizor poate declara o limită superioară `max_concurrent`
-(`provider_connections.max_concurrent`, configurată în fereastra modală a conexiunii / API / DB).
-Lăsați câmpul necompletat pentru a nu impune nicio limită. Aceasta este singura setare care controlează nivelul de serializare
-de mai jos — configurați-o la concurența reală a contului (de exemplu, GLM ~1, MiniMax ~2).
+Fiecare conexiune de furnizor poate declara un plafon `max_concurrent`
+(`provider_connections.max_concurrent`, configurat în fereastra modală a conexiunii / API / DB).
+Lăsați-l necompletat pentru a nu impune nicio limită. Aceasta este setarea unică ce controlează nivelul
+de serializare de mai jos — configurați-o la concurența reală a contului (de exemplu, GLM ~1, MiniMax ~2).
 
-### Serializarea solicitărilor cu partajarea cotei
+### Limite de concurență per model (`modelConcurrency`)
 
-Atunci când o rutare quota-share vizează o conexiune care declară o valoare pozitivă
-pentru `max_concurrent`, solicitările concurente către acel **cont** sunt serializate printr-un
+O conexiune poate declara suplimentar plafoane exacte de concurență per model
+în cadrul mapării sale `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Configurați-le în fereastra modală a conexiunii (**Suprascrieri ale limitelor de rată → Limite de
+concurență per model**, câte un `model=cap` pe linie) sau prin
+`PATCH /api/providers/[id]`, folosind aceeași structură JSON. Semantica cheilor:
+
+- **La nivelul conexiunii vs. specific modelului:** `maxConcurrent` rămâne plafonul partajat
+  la nivelul întregii conexiuni. Când se aplică ambele, ambele porți sunt dobândite
+  atomic în cadrul aceleiași porți compuse
+  (`global → provider → account → model`); comportamentul efectiv este determinat de
+  limita aplicabilă mai strictă.
+- **Potrivire exactă a cheii modelului:** cheia este șirul modelului transmis către
+  executor după rezolvarea rutării — în mod normal, ID-ul simplu al modelului upstream
+  (`glm-5`), nu un alias `provider/model` definit de client (`zai/glm-5` nu
+  corespunde cu `glm-5`). Valorile sunt plafoane de solicitări concurente exprimate ca numere întregi pozitive.
+- **Așteptare locală în coadă, fără detectare:** solicitările excedentare așteaptă local în coadă conform
+  semanticii existente pentru coadă/expirare (erori tipizate de admitere `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute nu detectează și nu
+  deduce politica upstream — aplică exact plafoanele configurate de
+  operator. O poartă de model saturată nu dezactivează niciodată furnizorul și nu
+  creează niciodată o blocare permanentă a modelului; comportamentul pentru 429/perioada de așteptare/fallback
+  de la upstream rămâne mecanismul de rezervă pentru erori.
+- **Domeniu per conexiune, per proces:** limitele se aplică per conexiune din baza de date
+  și sunt păstrate în memorie, astfel încât două conexiuni care reutilizează aceeași cheie API upstream
+  nu se coordonează între ele.
+- **Neconfigurat înseamnă neschimbat:** omiterea mapării (sau lăsarea necompletată a
+  câmpului din panoul de control) nu adaugă nicio poartă de model. Exemplu de configurare fără
+  a impune vreo limită universală a furnizorului:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Serializarea solicitărilor Quota-Share
+
+Când o expediere quota-share vizează o conexiune care declară un
+`max_concurrent` pozitiv, solicitările concurente către acel **cont** sunt serializate printr-un
 semafor per conexiune (cheia `qsconn:<connectionId>`): solicitările excedentare **așteaptă în
-coadă**, în loc să supraîncarce contul. Comportamentul este de tip **fail-open** — dacă o coadă este saturată
-sau expiră timpul de așteptare, procesarea continuă fără un slot, în loc să respingă vreodată o solicitare
-care poate fi rutată. Activați sau dezactivați opțiunea în **Setări → Reziliență → Concurență per conexiune
-pentru partajarea cotei** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, activată
-implicit). În lipsa unei limite `max_concurrent`, comportamentul rămâne neschimbat.
+coadă**, în loc să supraîncarce contul. Acesta este de tip **fail-open** — o coadă saturată
+sau o expirare continuă fără obținerea unui slot, în loc să respingă vreodată o solicitare
+care poate fi expediată. Activați sau dezactivați opțiunea în **Setări → Reziliență → Concurență
+per conexiune pentru Quota-Share** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, activată
+implicit). Fără un plafon `max_concurrent`, comportamentul rămâne neschimbat.
 
-> Mecanismul de rutare pentru partajarea cotei (`selectQuotaShareTarget`, DRR + P2C) este el însuși
-> de tip fail-open și doar _reduce prioritatea_ unei conexiuni care și-a atins limita — în cazul unui
-> grup cu o singură conexiune, acesta nu poate impune o limită strictă, astfel încât acest semafor este cel care
-> limitează efectiv afluxul de solicitări.
+> Poarta de rutare quota-share (`selectQuotaShareTarget`, DRR + P2C) este ea însăși
+> de tip fail-open și doar _reduce prioritatea_ unei conexiuni care și-a atins limita — într-un
+> grup cu o singură conexiune, aceasta nu poate impune strict limita, astfel încât acest semafor este cel care
+> limitează efectiv afluxul.
 
-### Reîncercare pentru combinații, ținând cont de perioada de pauză
+### Reîncercare adaptată la perioada de așteptare pentru combinații
 
-Pentru fiecare strategie de combinație (atunci când este activată), o solicitare care ar concretiza o eroare 429
-pentru o perioadă SCURTĂ de pauză tranzitorie așteaptă finalizarea acesteia și este rutată din nou, în loc
-să returneze eroarea 429 — acest comportament acoperă ferestrele TPM/RPM specifice clasei Gemini (aproximativ 60 s conform retry-after)
-în combinațiile cu mai multe modele, de exemplu atunci când ambele ținte ale unei combinații cu 2 modele
-ating limita de rată per model. Comportamentul este limitat prin `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) în **Setări → Reziliență**. Nu se așteaptă niciodată pentru `quota_exhausted`
-(blocat până la miezul nopții) sau pentru motive legate de autentificare/resursă negăsită.
+Pentru fiecare strategie de combinație (când este activată), o solicitare care ar concretiza un răspuns 429
+pentru o perioadă de așteptare tranzitorie SCURTĂ așteaptă încheierea acesteia și este reexpediată, în loc să
+returneze răspunsul 429 — aceasta acoperă ferestrele TPM/RPM din clasa Gemini (~60s retry-after)
+pentru combinațiile cu mai multe modele, de exemplu atunci când ambele ținte ale unei combinații cu 2 modele ating o limită de rată
+per model. Este limitată de `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) în **Setări → Reziliență**. Nu așteaptă niciodată pentru `quota_exhausted`
+(blocat până la miezul nopții) sau din motive de autentificare/resursă negăsită.
 
 ---
 

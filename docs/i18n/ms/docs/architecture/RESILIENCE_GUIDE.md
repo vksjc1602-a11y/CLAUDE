@@ -204,32 +204,32 @@ Mekanisme berkaitan kekal berasingan:
 
 ---
 
-## 3. Penguncian Model
+## 3. Sekatan Model
 
 **Skop:** gabungan penyedia + sambungan + model.
 
-**Skop kunci mengikut status:** status kegagalan menentukan kunci yang akan ditulis oleh penguncian
+**Skop kunci mengikut status:** status kegagalan menentukan kunci yang akan ditulis oleh sesuatu sekatan
 (`resolveLockoutScope()` dalam `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — isyarat kuota atau kelayakan — mengunci **keluarga kuota**:
-  untuk codex, seluruh skop `codex` / `spark` (setiap model `gpt-5*` bagi
+- `429` / `403` / `402` — isyarat kuota atau kelayakan — menyekat **keluarga kuota**:
+  untuk codex, keseluruhan skop `codex` / `spark` (setiap model `gpt-5*` bagi
   sambungan tersebut), manakala untuk penyedia lain, `getQuotaScopedModelForProvider()`.
-- `404` mengunci model asas (`getModelLockKey()` mengecilkan skop `not_found`).
+- `404` menyekat model asas (`getModelLockKey()` mengecilkan skop `not_found`).
 - Sebarang status lain — kegagalan pengangkutan/pelayan `5xx` dan `502` tersintesis
-  OmniRoute sendiri daripada pengesahan kualiti — hanya mengunci tupel
-  penyedia/sambungan/model yang **tepat**. Strim yang bermasalah pada satu model bukan bukti
+  OmniRoute sendiri daripada pengesahan kualiti — menyekat hanya gabungan
+  penyedia/sambungan/model yang **tepat**. Strim yang bermasalah pada satu model bukanlah bukti
   tentang kuota akaun; sebelum peraturan ini, satu respons kosong pada
-  `codex/gpt-5.6-luna` menyingkirkan setiap model `gpt-5*` bagi sambungan tersebut
-  daripada penghalaan selama 2–30 min (meningkat secara berperingkat) walaupun kuotanya tidak terjejas.
+  `codex/gpt-5.6-luna` mengeluarkan setiap model `gpt-5*` bagi sambungan tersebut daripada
+  penghalaan selama 2–30 min (meningkat secara berperingkat) walaupun kuotanya tidak terjejas.
 - Pilihan `scope` eksplisit pemanggil sentiasa diutamakan (Antigravity menghantar `"exact"`).
 
-**Tujuan:** mengelakkan seluruh sambungan dinyahdayakan apabila hanya satu model tidak tersedia atau dihadkan kuota.
+**Tujuan:** mengelakkan keseluruhan sambungan dinyahdayakan apabila hanya satu model tidak tersedia atau dikenakan had kuota.
 
 **Contoh:**
 
 - Penyedia dengan kuota per model yang mengembalikan 429
 - Penyedia setempat yang mengembalikan 404 untuk satu model yang tiada
-- Kegagalan kebenaran mod/model khusus penyedia (contohnya, mod Grok)
+- Kegagalan kebenaran mod/model khusus penyedia (cth., mod Grok)
 
 **Pelaksanaan:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
@@ -237,98 +237,161 @@ Mekanisme berkaitan kekal berasingan:
 
 UI: Tetapan → Tempoh Bertenang Model (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Menyenaraikan penguncian aktif dengan: penyedia, sambungan, model, sebab, expiresAt. Pengendali boleh mendayakan semula model secara manual daripada kad tersebut.
+Menyenaraikan sekatan aktif dengan: penyedia, sambungan, model, sebab, expiresAt. Pengendali boleh mendayakan semula model secara manual daripada kad tersebut.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — senaraikan penguncian aktif
-- `DELETE /api/resilience/model-cooldowns` — dayakan semula secara manual. Isi: `{provider, connection, model}`. Pengesahan: pengurusan.
+- `GET /api/resilience/model-cooldowns` — senaraikan sekatan aktif
+- `DELETE /api/resilience/model-cooldowns` — pendayaan semula manual. Badan: `{provider, connection, model}`. Pengesahan: pengurusan.
 
-### UI tetapan penguncian + pemulihan susutan kejayaan (v3.8.23)
+### Pengurus Tempoh Bertenang
 
-Penguncian model berubah daripada tingkah laku berkod keras yang sentiasa aktif kepada ciri
-ikut serta yang boleh dikonfigurasikan sepenuhnya, dengan kad tetapannya sendiri dan laluan pemulihan yang membaiki kendiri.
+UI: Pemantauan → Pengurus Tempoh Bertenang (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**Kad tetapan:** Tetapan → Penguncian Model
+Satu halaman untuk setiap sambungan yang dikeluarkan daripada penghalaan atas sebab sementara, dan bukannya
+membuka setiap halaman penyedia. Halaman ini menyenaraikan tempoh bertenang sambungan, sekatan model dan keadaan
+terminal, mengosongkannya bagi setiap sambungan, bagi sesuatu pilihan, atau bagi semua sambungan penyedia,
+serta mengedit peraturan tempoh bertenang yang paling kerap ditala: `streamStallCooldown.enabled` dan tempoh bertenang asas
+`connectionCooldown` OAuth / kunci API serta bilangan maksimum langkah undur (disimpan melalui
+`PATCH /api/resilience`). Keadaan terminal (`banned`, `expired`, `credits_exhausted`) disenaraikan
+tetapi tidak pernah dikosongkan di sini.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, pengesahan: pengurusan):
+
+- `GET /api/resilience/cooldowns[?provider=]` — sambungan dengan status, baki tempoh bertenang,
+  tahap undur, jenis ralat terakhir dan sekatan model (tanpa kelayakan)
+- `POST /api/resilience/cooldowns` — badan `{connectionIds: string[]}` atau
+  `{all: true, provider?}`; mengembalikan `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI tetapan sekatan + pemulihan susutan kejayaan (v3.8.23)
+
+Sekatan model berubah daripada tingkah laku berkod keras yang sentiasa aktif kepada ciri
+ikut serta yang boleh dikonfigurasikan sepenuhnya, dengan kad tetapannya sendiri dan laluan pemulihan kendiri.
+
+**Kad tetapan:** Tetapan → Sekatan Model
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
 Ini **berbeza** daripada `ModelCooldownsCard` baca sahaja di atas (yang hanya
-_menyenaraikan_ penguncian aktif) — kad baharu _mengkonfigurasikan parameter_. Nilai lalai
-terdapat dalam `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+_menyenaraikan_ sekatan aktif) — kad baharu ini _mengkonfigurasikan parameter_. Nilai lalai
+terletak dalam `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
 | Tetapan                 | Lalai                            | Maksud                                                                     |
 | ----------------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Togol utama — penguncian model **dimatikan secara lalai**.                 |
+| `enabled`               | `false`                          | Togol utama — sekatan model **dimatikan secara lalai**.                    |
 | `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status huluan yang dikira sebagai kegagalan berskop model.                 |
-| `baseCooldownMs`        | `120_000` (120 s)                | Tempoh penguncian awal untuk kegagalan pertama.                            |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Had tempoh bertenang yang ditingkatkan.                                    |
+| `baseCooldownMs`        | `120_000` (120 s)                | Tempoh sekatan awal untuk kegagalan pertama.                               |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Had maksimum tempoh bertenang yang ditingkatkan.                           |
 | `maxBackoffSteps`       | `10`                             | Bilangan maksimum langkah peningkatan undur eksponen.                      |
 | `useExponentialBackoff` | `true`                           | Sama ada kegagalan berulang meningkatkan tempoh bertenang secara eksponen. |
 
-Tetapan disimpan melalui stor tetapan biasa dan disahkan melalui
-skema tetapan daya tahan; kad tersebut mengehadkan `baseCooldownMs`/`maxCooldownMs`
+Tetapan dikekalkan melalui stor tetapan biasa dan disahkan melalui skema tetapan
+daya tahan; kad tersebut mengehadkan `baseCooldownMs`/`maxCooldownMs`
 (dengan `maxCooldownMs ≥ baseCooldownMs`) dan `maxBackoffSteps`.
 
-**Pemulihan susutan kejayaan:** pemulihan **bukan** semata-mata melalui tamat tempoh pemasa. Respons yang sihat
-mengurangkan kiraan kegagalan model secara berperingkat supaya model yang pulih
-dalam tetingkap berhenti meningkat (dan dikosongkan) sebelum pemasa tamat. Apabila sasaran
-kombo berjaya, `open-sse/services/combo.ts` memanggil `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), yang **membahagikan dua** nilai
-`failureCount` yang disimpan (`Math.floor(failureCount / 2)`); apabila nilainya mencapai `0`, entri penguncian
-dipadam sepenuhnya. Fungsi pelengkap `recordModelLockoutFailure()`
-meningkatkan kiraan (dan tempoh bertenang) apabila berlaku kegagalan dalam
+**Pemulihan susutan kejayaan:** pemulihan **bukan** semata-mata melalui tamat tempoh pemasa. Respons
+yang sihat mengurangkan kiraan kegagalan model secara berperingkat supaya model yang pulih
+di pertengahan tempoh berhenti meningkat (dan dikosongkan) sebelum tamat tempoh pemasa. Apabila sasaran
+gabungan berjaya, `open-sse/services/combo.ts` memanggil `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), yang **membahagikan dua** nilai tersimpan
+`failureCount` (`Math.floor(failureCount / 2)`); apabila nilainya mencapai `0`, entri sekatan
+dipadamkan sepenuhnya. Pasangan fungsinya, `recordModelLockoutFailure()`,
+meningkatkan kiraan (dan tempoh bertenang) apabila kegagalan berlaku dalam
 tetingkap peningkatan. Susutan kejayaan ini adalah tambahan kepada tamat tempoh pemasa biasa —
 mana-mana laluan boleh mendayakan semula model.
 
-**Keadaan:** penguncian disimpan **dalam memori** (`Map` bagi setiap proses yang mengandungi
-`ModelLockoutEntry` dan menggunakan `provider:connectionId:model` sebagai kunci, manakala penguncian skop tepat menggunakan
-`provider:connectionId:exact:model`), dan tidak disimpan ke dalam
-DB — ia akan hilang apabila dimulakan semula. _Tetapan_ disimpan secara berterusan; _keadaan_
-penguncian aktif bersifat sementara.
+**Keadaan:** sekatan disimpan **dalam memori** (`Map` per proses bagi
+`ModelLockoutEntry` yang menggunakan `provider:connectionId:model` sebagai kunci, manakala sekatan berskop tepat menggunakan
+`provider:connectionId:exact:model`), dan tidak dikekalkan dalam
+DB — sekatan hilang apabila proses dimulakan semula. _Tetapan_ dikekalkan; _keadaan_ sekatan
+aktif bersifat sementara.
 
 ---
 
 ## 4. Kawalan Keserentakan Perkongsian Kuota (v3.8.36)
 
-Akaun langganan (GLM, MiniMax, dll.) biasanya hanya menerima ~1–3 permintaan
-serentak; melebihi had tersebut akan mencetuskan 429 dan tempoh bertenang. Hal ini
-amat ketara bagi gabungan **quota-share** (`qtSd/…`), apabila beberapa kunci API
-berkongsi satu akaun huluan. Tiga lapisan menghalang akaun yang dikongsi daripada
-dibanjiri permintaan.
+Akaun langganan (GLM, MiniMax, dll.) selalunya hanya menerima ~1–3 permintaan
+serentak; melebihi had tersebut akan mencetuskan ralat 429 dan tempoh bertenang. Hal ini menjadi lebih kritikal dalam
+gabungan **perkongsian kuota** (`qtSd/…`), apabila beberapa kunci API berkongsi satu akaun
+huluan. Tiga lapisan menghalang akaun yang dikongsi daripada dibanjiri permintaan.
 
 ### Had keserentakan setiap sambungan (`max_concurrent`)
 
 Setiap sambungan penyedia boleh menetapkan had maksimum `max_concurrent`
 (`provider_connections.max_concurrent`, ditetapkan dalam modal sambungan / API / DB).
-Biarkan kosong untuk tiada had. Ini ialah satu-satunya tetapan yang mengawal lapisan
-pensirian di bawah — tetapkan kepada keserentakan sebenar akaun tersebut (cth. GLM ~1, MiniMax ~2).
+Biarkannya kosong jika tiada had. Ini ialah tetapan tunggal yang mengawal lapisan
+pensirian di bawah — tetapkan kepada keserentakan sebenar akaun (cth. GLM ~1, MiniMax ~2).
+
+### Had keserentakan setiap model (`modelConcurrency`)
+
+Sambungan juga boleh menetapkan had keserentakan tepat bagi setiap model
+dalam peta `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Tetapkannya dalam modal sambungan (**Penggantian had kadar → Had keserentakan
+setiap model**, satu `model=cap` bagi setiap baris) atau melalui
+`PATCH /api/providers/[id]` dengan bentuk JSON yang sama. Semantik utama:
+
+- **Seluruh sambungan berbanding khusus model:** `maxConcurrent` kekal sebagai
+  had seluruh sambungan yang dikongsi. Apabila kedua-duanya terpakai, kedua-dua gerbang diperoleh
+  secara atomik dalam gerbang komposit yang sama
+  (`global → provider → account → model`); tingkah laku efektif mematuhi
+  had terpakai yang lebih ketat.
+- **Padanan tepat kunci model:** kuncinya ialah rentetan model yang dihantar kepada
+  pelaksana selepas penyelesaian penghalaan — biasanya ID model huluan sahaja
+  (`glm-5`), bukan alias `provider/model` pada sisi klien (`zai/glm-5` tidak
+  sepadan dengan `glm-5`). Nilai ialah had bilangan permintaan serentak dalam bentuk integer positif.
+- **Giliran setempat, tanpa penemuan:** permintaan berlebihan beratur secara setempat mengikut
+  semantik giliran/masa tamat sedia ada (ralat kemasukan berjenis `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute tidak menemui atau
+  menyimpulkan dasar huluan — ia menguatkuasakan had tepat yang
+  dikonfigurasikan oleh pengendali. Gerbang model yang tepu tidak pernah menyahdayakan penyedia dan tidak pernah
+  mewujudkan sekatan kekal terhadap model; tingkah laku 429/tempoh bertenang/fallback huluan
+  kekal sebagai perlindungan terakhir terhadap ralat.
+- **Skop setiap sambungan, setiap proses:** had adalah bagi setiap sambungan pangkalan data
+  dan disimpan dalam memori, maka dua sambungan yang menggunakan semula kunci API huluan yang sama
+  tidak menyelaras antara satu sama lain.
+- **Tidak dikonfigurasikan bermaksud tiada perubahan:** mengabaikan peta tersebut (atau membiarkan
+  medan papan pemuka kosong) tidak menambahkan gerbang model. Contoh konfigurasi tanpa
+  menetapkan sebarang had penyedia sejagat:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Pensirian permintaan perkongsian kuota
 
-Apabila penghantaran perkongsian kuota menyasarkan sambungan yang menetapkan nilai
-`max_concurrent` positif, permintaan serentak kepada **akaun** tersebut disirikan melalui
+Apabila penghantaran perkongsian kuota menyasarkan sambungan yang menetapkan nilai positif
+`max_concurrent`, permintaan serentak kepada **akaun** tersebut disirikan melalui
 semafor setiap sambungan (kunci `qsconn:<connectionId>`): permintaan berlebihan **menunggu dalam
-baris gilir** dan bukannya membanjiri akaun. Mekanisme ini bersifat **fail-open** — baris gilir
-yang tepu atau tamat masa akan diteruskan tanpa slot dan tidak akan sekali-kali menolak permintaan
-yang boleh dihantar. Togol dalam **Settings → Resilience → Quota-share per-connection
-concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, diaktifkan secara
-lalai). Tanpa had `max_concurrent`, tingkah laku tidak berubah.
+giliran** dan bukannya membanjiri akaun. Mekanisme ini bersifat **fail-open** — giliran yang tepu
+atau masa tamat akan meneruskan proses tanpa slot dan bukannya menolak permintaan yang boleh
+dihantar. Togol dalam **Tetapan → Ketahanan → Keserentakan setiap sambungan
+perkongsian kuota** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, didayakan
+secara lalai). Tanpa had `max_concurrent`, tingkah laku kekal tidak berubah.
 
-> Get penghalaan perkongsian kuota (`selectQuotaShareTarget`, DRR + P2C) itu sendiri
-> bersifat fail-open dan hanya _mengurangkan keutamaan_ sambungan yang telah mencapai had — dengan
-> kumpulan satu sambungan, ia tidak dapat mengenakan had mutlak, maka semafor inilah yang sebenarnya
-> membendung banjiran tersebut.
+> Gerbang penghalaan perkongsian kuota (`selectQuotaShareTarget`, DRR + P2C) itu sendiri
+> bersifat fail-open dan hanya _menurunkan keutamaan_ sambungan yang telah mencapai had — dengan
+> kelompok satu sambungan, ia tidak boleh mengehadkan secara tegas, maka semafor inilah yang benar-benar
+> membendung limpahan permintaan.
 
-### Percubaan semula yang menyedari tempoh bertenang gabungan
+### Percubaan semula gabungan yang menyedari tempoh bertenang
 
-Bagi setiap strategi gabungan (apabila diaktifkan), permintaan yang akan menghasilkan 429
-secara muktamad untuk tempoh bertenang sementara yang PENDEK akan menunggu sehingga tempoh itu
-tamat dan dihantar semula dan bukannya mengembalikan 429 — ini merangkumi tetingkap TPM/RPM
-kelas Gemini (~60s retry-after) pada gabungan berbilang model, contohnya kedua-dua sasaran
-gabungan 2 model mencapai had kadar setiap model. Dihadkan oleh `comboCooldownWait`
-(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) dalam **Settings → Resilience**.
-Ia tidak pernah menunggu bagi `quota_exhausted` (dikunci sehingga tengah malam) atau sebab
-pengesahan/tidak ditemui.
+Bagi setiap strategi gabungan (apabila didayakan), permintaan yang akan memuktamadkan ralat 429
+untuk tempoh bertenang sementara yang PENDEK akan menunggu sehingga tempoh itu tamat dan dihantar semula, bukannya
+mengembalikan ralat 429 — ini merangkumi tetingkap TPM/RPM kelas Gemini (~60s retry-after)
+pada gabungan berbilang model, contohnya kedua-dua sasaran bagi gabungan 2 model mencapai had kadar
+setiap model. Dibataskan oleh `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) dalam **Tetapan → Ketahanan**. Ia tidak pernah menunggu untuk `quota_exhausted`
+(dikunci sehingga tengah malam) atau sebab pengesahan/tidak ditemui.
 
 ---
 

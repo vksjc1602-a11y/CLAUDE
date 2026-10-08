@@ -204,131 +204,193 @@ OmniRoute પાસે ત્રણ અલગ પરંતુ પરસ્પર
 
 ---
 
-## 3. મોડેલ લોકઆઉટ
+## 3. મોડેલ લૉકઆઉટ
 
 **વ્યાપ:** provider + connection + model ત્રિપુટી.
 
-**સ્થિતિ અનુસાર કીનો વ્યાપ:** નિષ્ફળતાની સ્થિતિ નક્કી કરે છે કે લોકઆઉટ કઈ કીમાં લખાય છે
-(`open-sse/services/accountFallback/exactModelLock.ts` માં `resolveLockoutScope()`):
+**સ્થિતિ મુજબ કીનો વ્યાપ:** નિષ્ફળતાની સ્થિતિ નક્કી કરે છે કે લૉકઆઉટ કઈ કીમાં
+લખાશે (`open-sse/services/accountFallback/exactModelLock.ts` માં `resolveLockoutScope()`):
 
-- `429` / `403` / `402` — quota અથવા entitlement સંકેત — **quota family** ને લૉક કરે છે:
-  codex માટે સંપૂર્ણ `codex` / `spark` વ્યાપ (connection ના દરેક `gpt-5*` model),
+- `429` / `403` / `402` — ક્વોટા અથવા અધિકારનો સંકેત — **ક્વોટા ફૅમિલી**ને લૉક કરે છે:
+  codex માટે સમગ્ર `codex` / `spark` વ્યાપ (connectionનું દરેક `gpt-5*` model),
   અન્ય providers માટે `getQuotaScopedModelForProvider()`.
-- `404` મૂળ model ને લૉક કરે છે (`getModelLockKey()` `not_found` ને સંકુચિત કરે છે).
-- અન્ય કોઈપણ સ્થિતિ — `5xx` transport/server નિષ્ફળતાઓ અને ગુણવત્તા માન્યતામાંથી
-  OmniRoute દ્વારા પોતે બનાવાયેલ `502` — ફક્ત **ચોક્કસ**
+- `404` મૂળ modelને લૉક કરે છે (`getModelLockKey()` `not_found`ને સંકુચિત કરે છે).
+- અન્ય કોઈપણ સ્થિતિ — `5xx` ટ્રાન્સપોર્ટ/server નિષ્ફળતાઓ અને ગુણવત્તા માન્યતામાંથી
+  OmniRoute દ્વારા સ્વયં બનાવાયેલ `502` — ફક્ત **ચોક્કસ**
   provider/connection/model ત્રિપુટીને લૉક કરે છે. એક model પર ખરાબ stream એ
-  account ના quota વિશેનો પુરાવો નથી; આ નિયમ પહેલાં
-  `codex/gpt-5.6-luna` પરના એક ખાલી પ્રતિસાદથી તે connection ના દરેક `gpt-5*`
-  model ને routing માંથી 2–30 મિનિટ માટે દૂર કરવામાં આવતાં હતાં (ક્રમશઃ વધતા),
-  જ્યારે તેનો quota અસ્પર્શિત રહેતો હતો.
-- caller નો સ્પષ્ટ `scope` વિકલ્પ હંમેશાં અગ્રતા મેળવે છે (Antigravity `"exact"` પસાર કરે છે).
+  accountના quota વિશેનો પુરાવો નથી; આ નિયમ પહેલાં
+  `codex/gpt-5.6-luna` પરના એક ખાલી responseને કારણે તે connectionનાં દરેક
+  `gpt-5*` modelને routingમાંથી 2–30 મિનિટ માટે (વધતા ક્રમમાં) દૂર કરવામાં આવતાં,
+  જ્યારે તેનો quota અસ્પર્શિત રહેતો.
+- callerનો સ્પષ્ટ `scope` વિકલ્પ હંમેશાં પ્રાધાન્ય પામે છે (Antigravity `"exact"` પસાર કરે છે).
 
-**હેતુ:** જ્યારે ફક્ત એક model અનુપલબ્ધ હોય અથવા quota-મર્યાદિત હોય ત્યારે સંપૂર્ણ connection ને અક્ષમ કરવાનું ટાળવું.
+**હેતુ:** માત્ર એક model અનુપલબ્ધ હોય અથવા quota દ્વારા મર્યાદિત હોય ત્યારે સમગ્ર connectionને અક્ષમ કરવાનું ટાળવું.
 
 **ઉદાહરણો:**
 
-- 429 પરત કરતા પ્રતિ-model quota providers
-- એક ખૂટતા model માટે 404 પરત કરતા સ્થાનિક providers
-- provider-વિશિષ્ટ mode/model પરવાનગી નિષ્ફળતાઓ (દા.ત., Grok modes)
+- પ્રતિ-model quota ધરાવતા providers દ્વારા પરત કરાતો 429
+- એક ગુમ model માટે local providers દ્વારા પરત કરાતો 404
+- Provider-વિશિષ્ટ mode/model પરવાનગી નિષ્ફળતાઓ (દા.ત., Grok modes)
 
 **અમલીકરણ:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### મોડેલ કૂલડાઉન્સ ડૅશબોર્ડ (v3.8.0)
+### Model Cooldowns ડૅશબોર્ડ (v3.8.0)
 
 UI: Settings → Model Cooldowns (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-નીચેની વિગતો સાથે સક્રિય lockouts ની સૂચિ આપે છે: provider, connection, model, કારણ, expiresAt. Operators કાર્ડમાંથી model ને મેન્યુઅલી ફરી સક્ષમ કરી શકે છે.
+સક્રિય lockoutsને આ વિગતો સાથે સૂચિબદ્ધ કરે છે: provider, connection, model, reason, expiresAt. ઑપરેટરો cardમાંથી modelને મેન્યુઅલી ફરી સક્ષમ કરી શકે છે.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — સક્રિય lockouts ની સૂચિ મેળવો
-- `DELETE /api/resilience/model-cooldowns` — મેન્યુઅલી ફરી સક્ષમ કરો. Body: `{provider, connection, model}`. Auth: management.
+- `GET /api/resilience/model-cooldowns` — સક્રિય lockoutsની સૂચિ
+- `DELETE /api/resilience/model-cooldowns` — મેન્યુઅલ પુનઃસક્ષમીકરણ. Body: `{provider, connection, model}`. Auth: management.
 
-### લોકઆઉટ સેટિંગ્સ UI + સફળતા-ક્ષય પુનઃપ્રાપ્તિ (v3.8.23)
+### Cooldown Manager
 
-Model lockout હંમેશાં ચાલુ રહેતી હાર્ડકોડ કરેલી વર્તણૂકમાંથી સંપૂર્ણપણે રૂપરેખાંકિત કરી શકાય તેવી,
-વૈકલ્પિક સુવિધામાં ફેરવાયું છે, જેમાં તેનું પોતાનું settings card અને સ્વયં-પુનઃસ્થાપિત થતો recovery path છે.
+UI: Monitoring → Cooldown Manager (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
 
-**સેટિંગ્સ કાર્ડ:** Settings → Model Lockout
+દરેક provider page ખોલવાને બદલે, ક્ષણિક કારણસર routingમાંથી બહાર હોય તેવા દરેક connection માટે એક જ page.
+તે connection cooldowns, model lockouts અને terminal statesને સૂચિબદ્ધ કરે છે; તેમને પ્રતિ connection,
+પસંદગી માટે અથવા providerનાં તમામ connections માટે સાફ કરે છે; અને સૌથી વધુ સમાયોજિત કરાતા cooldown
+નિયમોને સંપાદિત કરે છે: `streamStallCooldown.enabled` તથા OAuth / API-key
+`connectionCooldown`નું base cooldown અને maximum backoff steps (`PATCH /api/resilience`
+દ્વારા સાચવવામાં આવે છે). Terminal states (`banned`, `expired`, `credits_exhausted`) અહીં
+સૂચિબદ્ધ થાય છે, પરંતુ ક્યારેય સાફ કરવામાં આવતાં નથી.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, auth: management):
+
+- `GET /api/resilience/cooldowns[?provider=]` — status, બાકી રહેલો cooldown,
+  backoff level, છેલ્લો error type અને model lockouts ધરાવતા connections (કોઈ credentials નહીં)
+- `POST /api/resilience/cooldowns` — body `{connectionIds: string[]}` અથવા
+  `{all: true, provider?}`; `{cleared, unchanged, skippedTerminal, lockoutsCleared}` પરત કરે છે
+
+### Lockout settings UI + success-decay recovery (v3.8.23)
+
+Model lockout હંમેશાં સક્રિય રહેતી hardcoded વર્તણૂકમાંથી સંપૂર્ણપણે રૂપરેખાંકિત કરી શકાય તેવી,
+પસંદગીથી સક્ષમ થતી સુવિધામાં પરિવર્તિત થયું છે, જેમાં તેનું પોતાનું settings card અને self-healing recovery path છે.
+
+**Settings card:** Settings → Model Lockout
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-આ ઉપરના ફક્ત વાંચી શકાય તેવા `ModelCooldownsCard` થી **અલગ** છે (જે માત્ર
-સક્રિય lockouts ની _સૂચિ_ આપે છે) — નવું card _પરિમાણોને રૂપરેખાંકિત કરે છે_. Defaults
+આ ઉપરના ફક્ત વાંચી શકાય તેવા `ModelCooldownsCard`થી **અલગ** છે (જે ફક્ત
+સક્રિય lockoutsને _સૂચિબદ્ધ_ કરે છે) — નવું card _parametersને રૂપરેખાંકિત કરે છે_. Defaults
 `DEFAULT_MODEL_LOCKOUT_SETTINGS`
-(`src/lib/resilience/modelLockoutSettings.ts`) માં છે:
+(`src/lib/resilience/modelLockoutSettings.ts`)માં છે:
 
-| સેટિંગ                  | ડિફૉલ્ટ                          | અર્થ                                                                 |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `enabled`               | `false`                          | મુખ્ય toggle — model lockout **ડિફૉલ્ટ રૂપે બંધ** છે.                |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | model-વ્યાપી નિષ્ફળતા તરીકે ગણાતી upstream સ્થિતિઓ.                  |
-| `baseCooldownMs`        | `120_000` (120 s)                | પ્રથમ નિષ્ફળતા માટે lockout નો પ્રારંભિક સમયગાળો.                    |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | વધતા cooldown માટેની મહત્તમ મર્યાદા.                                 |
-| `maxBackoffSteps`       | `10`                             | મહત્તમ exponential-backoff વૃદ્ધિ પગલાં.                             |
-| `useExponentialBackoff` | `true`                           | પુનરાવર્તિત નિષ્ફળતાઓ cooldown ને exponential રીતે વધારે છે કે નહીં. |
+| સેટિંગ                  | Default                          | અર્થ                                                               |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------ |
+| `enabled`               | `false`                          | મુખ્ય toggle — model lockout **ડિફૉલ્ટરૂપે બંધ** છે.               |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | model-વ્યાપી નિષ્ફળતા તરીકે ગણાતી upstream statuses.               |
+| `baseCooldownMs`        | `120_000` (120 s)                | પ્રથમ નિષ્ફળતા માટેની પ્રારંભિક lockout અવધિ.                      |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | વધારવામાં આવેલા cooldownની મહત્તમ મર્યાદા.                         |
+| `maxBackoffSteps`       | `10`                             | exponential-backoff વધારાના મહત્તમ steps.                          |
+| `useExponentialBackoff` | `true`                           | પુનરાવર્તિત નિષ્ફળતાઓ cooldownને exponential રીતે વધારે છે કે કેમ. |
 
-Settings સામાન્ય settings store મારફતે જળવાઈ રહે છે અને
-resilience settings schema દ્વારા માન્ય થાય છે; card `baseCooldownMs`/`maxCooldownMs`
-(`maxCooldownMs ≥ baseCooldownMs` સાથે) અને `maxBackoffSteps` ને મર્યાદામાં રાખે છે.
+Settings સામાન્ય settings store દ્વારા જળવાઈ રહે છે અને resilience settings schema દ્વારા
+માન્ય થાય છે; card `baseCooldownMs`/`maxCooldownMs`
+(`maxCooldownMs ≥ baseCooldownMs` સાથે) અને `maxBackoffSteps`ને મર્યાદામાં રાખે છે.
 
-**સફળતા-ક્ષય પુનઃપ્રાપ્તિ:** recovery ફક્ત timer સમાપ્ત થવા પર આધારિત **નથી**. સ્વસ્થ
-response model ની failure count ને ઘટાડે છે, જેથી window ની વચ્ચે recover થયેલું model
-તેનો timer સમાપ્ત થાય તે પહેલાં વૃદ્ધિ કરવાનું બંધ કરે (અને clear થાય). સફળ
+**Success-decay recovery:** recovery ફક્ત timer expiry પર આધારિત **નથી**. એક healthy
+response modelની failure countને ક્રમશઃ ઘટાડે છે, જેથી windowની વચ્ચે recover થયેલું model
+તેનો timer સમાપ્ત થાય તે પહેલાં escalation અટકાવે છે (અને સાફ થાય છે). સફળ
 combo target પર, `open-sse/services/combo.ts` `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`) ને call કરે છે, જે સંગ્રહિત
-`failureCount` ને **અડધું** કરે છે (`Math.floor(failureCount / 2)`); જ્યારે તે `0` સુધી
-પહોંચે છે ત્યારે lockout entry સંપૂર્ણપણે delete થઈ જાય છે. તેનો સમકક્ષ `recordModelLockoutFailure()`
-escalation window માં થતી નિષ્ફળતાઓ પર count વધારે છે (અને cooldown ને વધારે છે).
-આ success-decay સાદા timer expiry ઉપરાંત છે —
-બંનેમાંથી કોઈપણ માર્ગ model ને ફરી સક્ષમ કરી શકે છે.
+(`open-sse/services/accountFallback.ts`)ને કૉલ કરે છે, જે સંગ્રહિત
+`failureCount`ને **અડધો** કરે છે (`Math.floor(failureCount / 2)`); જ્યારે તે `0` પર પહોંચે છે,
+ત્યારે lockout entry સંપૂર્ણપણે કાઢી નાખવામાં આવે છે. તેનો સમકક્ષ `recordModelLockoutFailure()`
+escalation windowની અંદરની નિષ્ફળતાઓ પર count વધારે છે (અને cooldownને વધારે છે).
+આ success-decay સાદા timer expiry ઉપરાંત છે — બંનેમાંથી કોઈપણ માર્ગ modelને ફરી સક્ષમ કરી શકે છે.
 
-**સ્થિતિ:** lockouts DB માં જાળવવામાં આવતા નથી, પરંતુ **in-memory** રાખવામાં આવે છે (દર-process `Map`s,
-જેમાં `ModelLockoutEntry` ની કી `provider:connectionId:model` હોય છે અને exact-scope locks ની કી
-`provider:connectionId:exact:model` હોય છે) —
-restart થવા પર તે ગુમ થઈ જાય છે. _Settings_ જાળવવામાં આવે છે; સક્રિય
-lockout _state_ ક્ષણિક છે.
+**સ્થિતિ:** lockouts **in-memory** રાખવામાં આવે છે (દરેક process માટેના `Map`s,
+જેમાં `ModelLockoutEntry`ની કી `provider:connectionId:model` અને exact-scope locksની કી
+`provider:connectionId:exact:model` હોય છે), DBમાં જળવાતા
+નથી — restart થતાં તે ગુમ થઈ જાય છે. _Settings_ જળવાઈ રહે છે; સક્રિય
+lockout _સ્થિતિ_ ક્ષણિક છે.
 
 ---
 
 ## 4. ક્વોટા-શેર સમકાલીનતા નિયંત્રણ (v3.8.36)
 
-સબ્સ્ક્રિપ્શન એકાઉન્ટ્સ (GLM, MiniMax વગેરે) સામાન્ય રીતે ફક્ત ~1–3 સમકાલીન
-વિનંતીઓ સ્વીકારે છે; આ મર્યાદા વટાવવાથી 429 અને કૂલડાઉન ટ્રિગર થાય છે. આ સમસ્યા
-**quota-share** (`qtSd/…`) કોમ્બોમાં વધુ તીવ્ર બને છે, જ્યાં ઘણી API કી એક જ અપસ્ટ્રીમ
-એકાઉન્ટ શેર કરે છે. ત્રણ સ્તરો શેર કરેલા એકાઉન્ટને વિનંતીઓથી છલકાતું અટકાવે છે.
+સબ્સ્ક્રિપ્શન એકાઉન્ટ્સ (GLM, MiniMax વગેરે) ઘણીવાર માત્ર ~1–3 સમકાલીન
+વિનંતીઓ સ્વીકારે છે; તેનાથી વધુ થતાં 429s અને કૂલડાઉન ટ્રિગર થાય છે. આ સમસ્યા
+**quota-share** (`qtSd/…`) કોમ્બોઝ હેઠળ વધુ તીવ્ર બને છે, જ્યાં ઘણી API કીઓ એક જ અપસ્ટ્રીમ
+એકાઉન્ટ શેર કરે છે. ત્રણ સ્તરો શેર કરેલા એકાઉન્ટને વિનંતીઓથી ભરાઈ જવાથી બચાવે છે.
 
 ### પ્રતિ-કનેક્શન સમકાલીનતા મર્યાદા (`max_concurrent`)
 
 દરેક પ્રોવાઇડર કનેક્શન `max_concurrent`ની મહત્તમ મર્યાદા જાહેર કરી શકે છે
 (`provider_connections.max_concurrent`, જેને કનેક્શન મોડલ / API / DBમાં સેટ કરવામાં આવે છે).
-કોઈ મર્યાદા ન રાખવા માટે તેને ખાલી છોડો. આ જ એકમાત્ર સેટિંગ છે જે નીચેના સિરિયલાઇઝેશન
-સ્તરને નિયંત્રિત કરે છે — તેને એકાઉન્ટની વાસ્તવિક સમકાલીનતા પર સેટ કરો (દા.ત. GLM ~1, MiniMax ~2).
+કોઈ મર્યાદા ન રાખવા માટે તેને ખાલી છોડો. નીચેના સિરિયલાઇઝેશન સ્તરને નિયંત્રિત કરતું આ
+એકમાત્ર સેટિંગ છે — તેને એકાઉન્ટની વાસ્તવિક સમકાલીનતા પ્રમાણે સેટ કરો (દા.ત. GLM ~1, MiniMax ~2).
+
+### પ્રતિ-મોડેલ સમકાલીનતા મર્યાદાઓ (`modelConcurrency`)
+
+કનેક્શન તેના `rateLimitOverrides` મેપમાં ચોક્કસ પ્રતિ-મોડેલ સમકાલીનતા મર્યાદાઓ
+પણ જાહેર કરી શકે છે:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+તેને કનેક્શન મોડલમાં (**રેટ લિમિટ ઓવરરાઇડ્સ → પ્રતિ-મોડેલ
+સમકાલીનતા મર્યાદાઓ**, દરેક લાઇનમાં એક `model=cap`) અથવા સમાન JSON બંધારણ સાથે
+`PATCH /api/providers/[id]` મારફતે સેટ કરો. કીની અર્થસંહિતા:
+
+- **કનેક્શન-વ્યાપી વિરુદ્ધ મોડેલ-વિશિષ્ટ:** `maxConcurrent` શેર કરેલી
+  કનેક્શન-વ્યાપી મહત્તમ મર્યાદા તરીકે જ રહે છે. જ્યારે બંને લાગુ પડે, ત્યારે બંને ગેટ
+  સમાન સંયુક્ત ગેટમાં પરમાણ્વિક રીતે પ્રાપ્ત કરવામાં આવે છે
+  (`global → provider → account → model`); અસરકારક વર્તન વધુ કડક લાગુ પડતી
+  મર્યાદા મુજબ હોય છે.
+- **ચોક્કસ મોડેલ-કી મેળ:** કી એ રૂટિંગ રિઝોલ્યુશન પછી એક્ઝિક્યુટરને મોકલાતી
+  મોડેલ સ્ટ્રિંગ છે — સામાન્ય રીતે મૂળ અપસ્ટ્રીમ મોડેલ id
+  (`glm-5`), ક્લાયન્ટ-સાઇડ `provider/model` ઉપનામ નહીં (`zai/glm-5`
+  એ `glm-5` સાથે મેળ ખાતું નથી). મૂલ્યો ધન પૂર્ણાંકવાળી સમકાલીન-વિનંતી મર્યાદાઓ છે.
+- **સ્થાનિક કતારબદ્ધતા, કોઈ શોધ નહીં:** વધારાની વિનંતીઓ હાલની
+  કતાર/ટાઇમઆઉટ અર્થસંહિતા સાથે સ્થાનિક રીતે કતારમાં જાય છે (ટાઇપ કરેલી `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` પ્રવેશ ભૂલો). OmniRoute અપસ્ટ્રીમ નીતિ શોધતું કે
+  અનુમાનતું નથી — તે ઑપરેટરે કન્ફિગર કરેલી ચોક્કસ મર્યાદાઓ લાગુ કરે છે.
+  સંતૃપ્ત મોડેલ ગેટ ક્યારેય પ્રોવાઇડરને નિષ્ક્રિય કરતું નથી અને ક્યારેય કાયમી
+  મોડેલ લૉકઆઉટ બનાવતું નથી; અપસ્ટ્રીમ 429/કૂલડાઉન/ફૉલબૅક વર્તન ભૂલ સામેના અંતિમ ઉપાય તરીકે રહે છે.
+- **પ્રતિ-કનેક્શન, પ્રતિ-પ્રોસેસ વ્યાપ:** મર્યાદાઓ દરેક ડેટાબેઝ કનેક્શન માટે અલગ હોય છે
+  અને મેમરીમાં રાખવામાં આવે છે, તેથી સમાન અપસ્ટ્રીમ API કી ફરી વાપરતાં બે કનેક્શન્સ
+  એકબીજા સાથે સમન્વય કરતા નથી.
+- **કન્ફિગર ન કરેલું એટલે અપરિવર્તિત:** મેપને બાકાત રાખવાથી (અથવા
+  ડેશબોર્ડ ફીલ્ડ ખાલી છોડવાથી) કોઈ મોડેલ ગેટ ઉમેરાતો નથી. કોઈ સર્વવ્યાપી પ્રોવાઇડર મર્યાદાનો
+  દાવો કર્યા વિનાનું ઉદાહરણ કન્ફિગરેશન:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### ક્વોટા-શેર વિનંતી સિરિયલાઇઝેશન
 
-જ્યારે ક્વોટા-શેર ડિસ્પેચ સકારાત્મક `max_concurrent` જાહેર કરતા કનેક્શનને લક્ષિત કરે છે,
-ત્યારે તે **એકાઉન્ટ** માટેની સમકાલીન વિનંતીઓને પ્રતિ-કનેક્શન સેમાફોર
-(કી `qsconn:<connectionId>`) મારફતે ક્રમબદ્ધ કરવામાં આવે છે: વધારાની વિનંતીઓ એકાઉન્ટને
-છલકાવવાને બદલે **કતારમાં રાહ જુએ છે**. તે **fail-open** છે — સંતૃપ્ત કતાર અથવા
-ટાઇમઆઉટ હોય ત્યારે, ડિસ્પેચ કરી શકાય તેવી વિનંતીને ક્યારેય નકારવાને બદલે સ્લોટ વિના
-પ્રક્રિયા આગળ વધે છે. તેને **Settings → Resilience → Quota-share per-connection
-concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, ડિફૉલ્ટ રૂપે
-ચાલુ)માં ટૉગલ કરો. `max_concurrent` મર્યાદા વિના વર્તન બદલાતું નથી.
+જ્યારે ક્વોટા-શેર ડિસ્પૅચ ધનાત્મક `max_concurrent` જાહેર કરતા કનેક્શનને લક્ષ્ય બનાવે છે,
+ત્યારે તે **એકાઉન્ટ** માટેની સમકાલીન વિનંતીઓ પ્રતિ-કનેક્શન સેમાફોર
+(કી `qsconn:<connectionId>`) મારફતે સિરિયલાઇઝ થાય છે: વધારાની વિનંતીઓ એકાઉન્ટને ભરવાને બદલે
+**કતારમાં રાહ જુએ છે**. તે **ફેઇલ-ઓપન** છે — સંતૃપ્ત કતાર અથવા ટાઇમઆઉટમાં, ડિસ્પૅચ કરી શકાય તેવી
+વિનંતીને ક્યારેય નકારવાને બદલે સ્લોટ વિના આગળ વધવામાં આવે છે.
+**સેટિંગ્સ → રેઝિલિયન્સ → ક્વોટા-શેર પ્રતિ-કનેક્શન
+સમકાલીનતા** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, ડિફૉલ્ટ રૂપે
+ચાલુ) માં તેને ટૉગલ કરો. `max_concurrent` મર્યાદા વિના વર્તન અપરિવર્તિત રહે છે.
 
-> ક્વોટા-શેર રાઉટિંગ ગેટ (`selectQuotaShareTarget`, DRR + P2C) પોતે પણ
-> fail-open છે અને મર્યાદા પર પહોંચેલા કનેક્શનને માત્ર _ઓછી પ્રાથમિકતા આપે છે_ —
-> એક-કનેક્શન પૂલમાં તે કડક મર્યાદા લાગુ કરી શકતું નથી, તેથી આ સેમાફોર જ વાસ્તવમાં
-> વિનંતીઓના ધસારાને નિયંત્રિત કરે છે.
+> ક્વોટા-શેર રૂટિંગ ગેટ (`selectQuotaShareTarget`, DRR + P2C) પોતે
+> ફેઇલ-ઓપન છે અને મર્યાદા પર પહોંચી ગયેલા કનેક્શનને માત્ર _ઓછી પ્રાથમિકતા_ આપે છે —
+> એક-કનેક્શન પૂલ સાથે તે હાર્ડ-લિમિટ કરી શકતું નથી, તેથી આ સેમાફોર જ વાસ્તવમાં
+> વિનંતીઓના પ્રવાહને નિયંત્રિત કરે છે.
 
 ### કોમ્બો કૂલડાઉન-અવેર પુનઃપ્રયાસ
 
-દરેક કોમ્બો વ્યૂહરચના માટે (જ્યારે સક્ષમ હોય), SHORT ક્ષણિક કૂલડાઉન માટે 429ને
-નિશ્ચિત કરી દે તેવી વિનંતી, 429 પરત કરવાને બદલે તે કૂલડાઉન સમાપ્ત થવાની રાહ જુએ છે
-અને ફરીથી ડિસ્પેચ થાય છે — આ મલ્ટિ-મોડલ કોમ્બો પરના Gemini-શ્રેણીના TPM/RPM
-વિન્ડો (~60s retry-after)ને આવરી લે છે, દા.ત. 2-મોડલ કોમ્બોના બંને લક્ષ્યો
-પ્રતિ-મોડલ દર મર્યાદા સુધી પહોંચે ત્યારે. **Settings → Resilience**માં
-`comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) દ્વારા
-આ મર્યાદિત થાય છે. તે `quota_exhausted` (મધરાત સુધી લૉક થયેલું) અથવા
-પ્રમાણીકરણ/ન મળવાનાં કારણો માટે ક્યારેય રાહ જોતું નથી.
+દરેક કોમ્બો વ્યૂહરચના માટે (સક્ષમ હોય ત્યારે), SHORT ક્ષણિક કૂલડાઉન માટે 429ને
+નિશ્ચિત બનાવી દેનારી વિનંતી 429 પરત કરવાને બદલે તે પૂર્ણ થાય ત્યાં સુધી રાહ જુએ છે અને
+ફરીથી ડિસ્પૅચ થાય છે — આ બહુ-મોડેલ કોમ્બોઝ પર Gemini-વર્ગની TPM/RPM વિન્ડોઝ
+(~60s retry-after)ને આવરી લે છે, દા.ત. 2-મોડેલ કોમ્બોના બંને લક્ષ્યો પ્રતિ-મોડેલ
+રેટ લિમિટને અથડાય ત્યારે. તે **સેટિંગ્સ → રેઝિલિયન્સ**માં `comboCooldownWait`
+(`enabled`, `maxWaitMs`, `maxAttempts`, `budgetMs`) દ્વારા મર્યાદિત છે.
+તે `quota_exhausted` (મધરાત સુધી લૉક થયેલું) અથવા ઑથ/નૉટ-ફાઉન્ડ કારણો પર ક્યારેય રાહ જોતું નથી.
 
 ---
 

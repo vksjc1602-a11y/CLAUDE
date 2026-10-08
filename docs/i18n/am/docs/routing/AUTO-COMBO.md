@@ -272,57 +272,61 @@ curl -sS http://localhost:20128/v1/chat/completions \
 `config.budgetFallback` inputs ይገባሉ። በcombo ውስጥ የተከማቸው `config.budgetFallback` ("strict" |
 "cheapest") ቋሚውን ፖሊሲ ያዘጋጃል፤ header ለአንድ ጥያቄ ብቻ ይተካዋል።
 
-## ሁሉም የማስተላለፊያ ስልቶች
+## ሁሉም የማዘዋወሪያ ስልቶች
 
-የOmniRoute combo engine **19 የማስተላለፊያ ስልቶችን** ይደግፋል (`src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES` ውስጥ የተገለጹ)። Auto Combo engine ራሱ በ`auto` ስልት ስር ይቀርባል፤ ሌሎቹ ደግሞ ለተቀመጡ combos ይገኛሉ።
+የOmniRoute ጥምር ሞተር **20 የማዘዋወሪያ ስልቶችን** ይደግፋል (በ`src/shared/constants/routingStrategies.ts` → `ROUTING_STRATEGY_VALUES` ውስጥ የታወጁ)። የAuto Combo ሞተሩ ራሱ በ`auto` ስልት ስር ይቀርባል፤ ሌሎቹ ደግሞ ተከማችተው ለሚቆዩ ጥምሮች ይገኛሉ።
 
-| ስልት                 | መግለጫ                                                                                                                                                                              |
-| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `priority`          | ግልጽ ቅድሚያ ያለው፣ የመጀመሪያውን target ቅድሚያ የሚሰጥ የተደረደረ ዝርዝር                                                                                                                               |
-| `weighted`          | በእያንዳንዱ target ክብደት መሠረት የሚካሄድ ክብደት-ተኮር የዘፈቀደ ምርጫ                                                                                                                                 |
-| `round-robin`       | targetsን በቅደም ተከተል በዙር መጠቀም (በቡድን፤ ከታች ይመልከቱ)                                                                                                                                     |
-| `context-relay`     | contextን በtargets መካከል ማስተላለፍ (ለረጅም ውይይቶች)                                                                                                                                        |
-| `fill-first`        | ወደ ቀጣዩ ከመሸጋገር በፊት የእያንዳንዱን target ኮታ መሙላት                                                                                                                                         |
-| `p2c`               | በPower-of-2-choices የዘፈቀደ የጭነት ማመጣጠን                                                                                                                                              |
-| `random`            | ወጥ የዘፈቀደ ምርጫ                                                                                                                                                                      |
-| `least-used`        | አሁን ዝቅተኛው ጭነት ያለበትን target መምረጥ                                                                                                                                                   |
-| `cost-optimized`    | በcatalog ዋጋ መሠረት የእያንዳንዱን request የ$ ወጪ መቀነስ                                                                                                                                      |
-| `reset-aware` ⭐    | በኮታ reset ጊዜ መሠረት ቅድሚያ መስጠት — አጭር የreset መስኮቶች ከፍ ያለ ደረጃ ያገኛሉ                                                                                                                     |
-| `reset-window`      | የኮታ መስኮታቸው ቀድሞ reset የሚደረግላቸውን targets መምረጥ                                                                                                                                       |
-| `headroom`          | ከፍተኛው የቀረ የኮታ ትርፍ አቅም ያለውን target መምረጥ                                                                                                                                            |
-| `strict-random`     | የተደጋገሙ ምርጫዎችን ሳያስወግድ የሚደረግ የዘፈቀደ ምርጫ                                                                                                                                              |
-| `auto`              | Auto Combo scoringን (16-factor) መጠቀም — **የሚመከር**                                                                                                                                  |
-| `lkgp`              | Last-Known-Good Path (የመጨረሻው ስኬታማ provider ላይ ያቆያል፣ ከዚያ ወደ rules ይመለሳል)                                                                                                           |
-| `context-optimized` | ለአሁኑ context መጠን በተሻለ ሁኔታ የሚስማማውን target መምረጥ                                                                                                                                     |
-| `cache-optimized`   | targetsን በprompt-cache affinity መሠረት እንደገና ማደራጀት — የዚህን request cached prefix ቀድሞውኑ ይዞ ሊገኝ የሚችለው connection መጀመሪያ ይሞከራል (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
-| `fusion` 🧬         | በትይዩ ወደ models ፓነል ማሰራጨት፣ ከዚያ በjudge አማካይነት አንድ መልስ ማዋሃድ (ከታች ይመልከቱ)                                                                                                              |
-| `pipeline`          | targetsን በቅደም ተከተል ማስኬድ፣ የእያንዳንዱን ደረጃ output ወደ ቀጣዩ ደረጃ input ማስገባት፤ የመጨረሻው መልስ ብቻ ይመለሳል (#6396)                                                                                  |
+| ስልት                 | መግለጫ                                                                                                                                                                       |
+| :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `priority`          | ግልጽ ቅድሚያ ያለው፣ የመጀመሪያውን ዒላማ ቀዳሚ የሚያደርግ የተደረደረ ዝርዝር                                                                                                                          |
+| `weighted`          | በእያንዳንዱ ዒላማ ክብደት መሠረት የሚደረግ ክብደት-ተኮር የዘፈቀደ ምርጫ                                                                                                                             |
+| `round-robin`       | ዒላማዎችን በቅደም ተከተል በዙር መጠቀም (በቡድን የሚከናወን፤ ከታች ይመልከቱ)                                                                                                                         |
+| `context-relay`     | ዐውደ-ጽሑፍን በዒላማዎች መካከል ማስተላለፍ (ረጅም ውይይቶች)                                                                                                                                    |
+| `fill-first`        | ወደ ቀጣዩ ዒላማ ከመሸጋገር በፊት የእያንዳንዱን ዒላማ ኮታ መሙላት                                                                                                                                 |
+| `p2c`               | የ2-ምርጫዎች ኃይልን የሚጠቀም የዘፈቀደ ጭነት ማመጣጠን                                                                                                                                        |
+| `random`            | ወጥ የዘፈቀደ ምርጫ                                                                                                                                                               |
+| `least-used`        | ዝቅተኛው የአሁኑ ጭነት ያለበትን ዒላማ መምረጥ                                                                                                                                              |
+| `cost-optimized`    | የካታሎግ ዋጋን መሠረት በማድረግ በእያንዳንዱ ጥያቄ የ$ ወጪን መቀነስ                                                                                                                               |
+| `reset-aware` ⭐    | በኮታ ዳግም ማስጀመሪያ ጊዜ መሠረት ቅድሚያ መስጠት — አጭር የዳግም ማስጀመሪያ መስኮቶች ከፍተኛ ደረጃ ያገኛሉ                                                                                                     |
+| `reset-window`      | የኮታ መስኮታቸው በቅርቡ ዳግም የሚጀምር ዒላማዎችን መምረጥ                                                                                                                                      |
+| `headroom`          | ከፍተኛው ቀሪ የኮታ ትርፍ ቦታ ያለውን ዒላማ መምረጥ                                                                                                                                          |
+| `quota-weighted`    | ኮታቸው ያለቀ መለያዎችን መዝለል፣ ከዚያም በበረራ ላይ ባለው ጭነት የተከፈለው ቀሪ ኮታ መጠን መሠረት ከቀሪዎቹ መካከል መምረጥ፤ ነባር ውይይቶች በተመረጠው ላይ እንደተሰኩ ይቆያሉ                                                          |
+| `strict-random`     | ተደጋጋሚ ምርጫዎችን ሳያስወግድ የሚደረግ የዘፈቀደ ምርጫ                                                                                                                                        |
+| `auto`              | የAuto Combo የውጤት አሰጣጥን (16-ምክንያቶች) መጠቀም — **የሚመከር**                                                                                                                        |
+| `lkgp`              | የመጨረሻ-የታወቀ-ጥሩ መንገድ (በመጨረሻ የተሳካው አቅራቢ ላይ ይሰካል፣ ከዚያም ወደ ደንቦች ይመለሳል)                                                                                                          |
+| `context-optimized` | ለአሁኑ የዐውደ-ጽሑፍ መጠን በተሻለ ሁኔታ የሚስማማውን ዒላማ መምረጥ                                                                                                                                |
+| `cache-optimized`   | ዒላማዎችን በprompt-cache ቅርበት መሠረት እንደገና ማደራጀት — የዚህን ጥያቄ በcache የተቀመጠ ቅድመ ቅጥያ ቀድሞውኑ የያዘ ሊሆን የሚችለው ግንኙነት መጀመሪያ ይሞከራል (`open-sse/services/combo/promptCacheAffinity.ts`, #8008) |
+| `fusion` 🧬         | ወደ ሞዴሎች ፓነል በትይዩ ማሰራጨት፣ ከዚያም በዳኛ አማካኝነት አንድ መልስ ማቀናበር (ከታች ይመልከቱ)                                                                                                          |
+| `pipeline`          | ዒላማዎችን በቅደም ተከተል ማስኬድ፣ የእያንዳንዱን ደረጃ ውጤት ወደ ቀጣዩ ደረጃ ግብዓት በማስገባት፤ የመጨረሻው መልስ ብቻ ይመለሳል (#6396)                                                                                |
 
 ⭐ = በv3.8.0 አዲስ · 🧬 = በv3.8.36 አዲስ
 
-### የ`weighted` አሠራር
+### የ`weighted` ባህሪ
 
-`weighted` **ለእያንዳንዱ request ተመጣጣኝ የዘፈቀደ ምርጫ** ነው
-(`open-sse/services/combo/targetSorters.ts` → `selectWeightedTarget`)፣ ማመጣጠኛ አይደለም፦
+`weighted` **ለእያንዳንዱ ጥያቄ በተመጣጣኝ መጠን የሚደረግ የዘፈቀደ ዕጣ ምርጫ** ነው
+(`open-sse/services/combo/targetSorters.ts` → `selectWeightedTarget`)፣ አመጣጣኝ አድራጊ አይደለም፦
 
-- እያንዳንዱ request በ`weight / totalWeight` ዕድል **አንድ** step ይመርጣል፤ የቀሩት steps
-  ለዚያ request እንደ fallback chain በክብደት ከከፍተኛ ወደ ዝቅተኛ ይደረደራሉ።
-- ክብደቱ `0` የሆነ (ወይም ያልተገለጸ) step፣ ሌላ ማንኛውም step
-  weight > 0 እስካለው ድረስ **ፈጽሞ አይመረጥም** — የተመረጠው step ካልተሳካ በኋላ እንደ fallback ብቻ ሊያገለግል ይችላል። ምርጫው ወጥ የሚሆነው **ሁሉም**
-  weights 0 ሲሆኑ ብቻ ነው።
-- ሁሉም targets የማይገኙባቸው steps — provider circuit breaker `OPEN`፣ connection
-  cooldown፣ model lockout — ምርጫው ከመካሄዱ በፊት ይወገዳሉ
-  (`open-sse/services/combo/targetResolution.ts`)፤ ስለዚህ አንድ ጤናማ step ሁሉንም requests ለጊዜው
-  ሊያሸንፍ ይችላል።
-- `stickyWeightedLimit` (የcombo ውቅር፣ default `1` = off) እንደገና ከመምረጡ በፊት የተመረጠውን step ለዚያ ብዛት
-  ተከታታይ ስኬቶች አቆይቶ ይይዛል።
+- እያንዳንዱ ጥያቄ `weight / totalWeight` የመሆን ዕድል ያለውን **አንድ** ደረጃ ይመርጣል፤ ቀሪዎቹ ደረጃዎች
+  ለዚያ ጥያቄ እንደ አማራጭ ሰንሰለት በክብደታቸው ከከፍተኛ ወደ ዝቅተኛ ይደረደራሉ።
+- ክብደቱ `0` የሆነ (ወይም የጎደለ) ደረጃ፣ ሌላ ማንኛውም ደረጃ ክብደት > 0 እስካለው ድረስ **በፍጹም አይመረጥም** — የተመረጠው ደረጃ ካልተሳካ በኋላ እንደ አማራጭ ብቻ ሊያገለግል ይችላል። ምርጫው ወጥ የሚሆነው **ሁሉም**
+  ክብደቶች 0 ሲሆኑ ብቻ ነው።
+- ዒላማዎቻቸው በሙሉ የማይገኙ ደረጃዎች — የአቅራቢ circuit breaker `OPEN`፣ የግንኙነት
+  cooldown፣ የሞዴል lockout — ዕጣው ከመውጣቱ በፊት ከምርጫው ይወገዳሉ
+  (`open-sse/services/combo/targetResolution.ts`)፣ ስለዚህ አንድ ጤናማ ደረጃ ለጊዜው እያንዳንዱን
+  ጥያቄ ሊያሸንፍ ይችላል።
+- `stickyWeightedLimit` (የጥምር ውቅር፣ ነባሪ `1` = ጠፍቷል) እንደገና ዕጣ ከመውጣቱ በፊት የተመረጠውን ደረጃ ለዚያ ያህል
+  ተከታታይ ስኬቶች እንደተሰካ ያቆየዋል።
 
-ጥብቅ የዙር ሽግግር ለማግኘት `round-robin`ን ይጠቀሙ፤ በ`weighted` ላይ እኩል weights ስታቲስቲካዊ — ጥብቅ
+ጥብቅ ማዞር ከፈለጉ `round-robin` ይጠቀሙ፤ በ`weighted` ላይ እኩል ክብደቶች ስታቲስቲካዊ — ጥብቅ
 ያልሆነ — ሚዛን ይሰጣሉ።
 
-### ወኪላዊ pipeline ሁነታ
+### የኤጀንቲክ ፓይፕላይን ሁነታ
 
-ባለሁለት-ደረጃ `pipeline` ጥምረት በ`config.agenticOrchestration.enabled` አማካኝነት የእቅድ አውጪ/አስፈጻሚ ማዘዋወርን መምረጥ ይችላል። የመጀመሪያው ዒላማ የእቅድ ማውጣትንና የመጨረሻ መልሶችን ይቆጣጠራል፤ ሁለተኛው ዒላማ ደግሞ ከደንበኛው ጋር ቤተኛ የሆኑ የመሣሪያ ጥሪዎችን ያወጣል። OmniRoute ከጥያቄው ፕሮቶኮል የሚመጡ የመሣሪያ-ውጤት ቀጣይ ሂደቶችን ይለያል፣ ሌላ የመሣሪያ ዙር ያስፈልግ እንደሆነ እቅድ አውጪውን ይጠይቃል፣ እና አስፈጻሚውን ወይም እቅድ አውጪውን ለደንበኛው የሚቀርበው ተለዋዋጭ የመጨረሻ ደረጃ አድርጎ ይመርጣል።
+ባለሁለት ደረጃ `pipeline` ጥምረት በ
+`config.agenticOrchestration.enabled` አማካኝነት የእቅድ አውጪ/አስፈጻሚ ማዞሪያን መምረጥ ይችላል። የመጀመሪያው ዒላማ የእቅድ ማውጣትን እና የመጨረሻ መልሶችን ይቆጣጠራል፤
+ሁለተኛው ዒላማ ደግሞ ለደንበኛው ቤተኛ የሆኑ የመሣሪያ ጥሪዎችን ያወጣል። OmniRoute ከጥያቄው ፕሮቶኮል የሚመጡ የመሣሪያ ውጤት
+ቀጣይነቶችን ይለያል፣ ሌላ ዙር የመሣሪያ ጥሪ ያስፈልግ እንደሆነ የእቅድ አውጪውን ይጠይቃል፣ እና በተለዋዋጭ ሁኔታ አስፈጻሚውን ወይም የእቅድ አውጪውን ለደንበኛው የሚታየው የመጨረሻ
+ደረጃ ያደርጋል።
 
 ```json
 {
@@ -334,17 +338,35 @@ curl -sS http://localhost:20128/v1/chat/completions \
 }
 ```
 
-አስፈጻሚው በአንድ ምላሽ ውስጥ ብዙ ገለልተኛ ጥሪዎችን ሊያወጣ ይችላል። ጥገኛ ጥሪዎች በቀጣዮቹ የደንበኛ መሣሪያ-ውጤት ዙሮች ይከናወናሉ፣ እቅድ አውጪውም እያንዳንዱን ውጤት ይገመግማል። `maxToolRounds` ነባሪው `8` ሲሆን `1`–`32` ይቀበላል፤ ገደቡ ከተደረሰ በኋላ እቅድ አውጪው በወቅቱ የሚገኘውን ምርጥ የመጨረሻ መልስ ማቅረብ አለበት። የውስጥ የእቅድ አውጪ ውሳኔዎች በቋት ይያዛሉ፣ የተመረጠው ለደንበኛ የሚቀርብ ምላሽ ግን የመጀመሪያውን የዥረት ምርጫ ይጠብቃል።
+አስፈጻሚው በአንድ ምላሽ ውስጥ በርካታ ነጻ ጥሪዎችን ሊያወጣ ይችላል። ጥገኛ ጥሪዎች
+በኋለኞቹ የደንበኛ መሣሪያ-ውጤት ዙሮች ውስጥ ይከናወናሉ፣ የእቅድ አውጪውም እያንዳንዱን ውጤት ይገመግማል።
+የ`maxToolRounds` ነባሪ ዋጋ `8` ሲሆን `1`–`32` ይቀበላል፤ ገደቡ ከተደረሰ በኋላ የእቅድ አውጪው
+ሊገኝ የሚችለውን ምርጥ የመጨረሻ መልስ ማቅረብ አለበት። የውስጥ የእቅድ አውጪ ውሳኔዎች በመጠባበቂያ ይቀመጣሉ፣ ለደንበኛው እንዲታይ የተመረጠው
+ምላሽ ግን የመጀመሪያውን የዥረት ምርጫ ይጠብቃል።
 
-### የ`round-robin` ተጣባቂ ባች እና የመለያ ማስፋፊያ
+### የ`round-robin` ቋሚ ባች እና የመለያ ማስፋፊያ
 
-Round-robin በባች ይሠራል፣ በእያንዳንዱ ደረጃ አንድ ጥያቄ አይደለም፦
+Round-robin በባች የሚከናወን እንጂ በእያንዳንዱ ደረጃ አንድ ጥያቄ አይደለም፦
 
-- `stickyRoundRobinLimit` (በቅደም ተከተል የጥምረት ውቅር፣ ከዚያ `comboStickyRoundRobinLimit`፣ በመቀጠል `settings.stickyRoundRobinLimit`፣ ነባሪው **3**) ወደ ሌላ ዒላማ ከመዞሩ በፊት ለዚያ ያህል ተከታታይ ስኬቶች ተመሳሳዩን ዒላማ ይጠቀማል። ለእያንዳንዱ-ጥያቄ መዞር የጥምረቱን መሻሪያ ወደ `1` ያቀናብሩ። የጥምረት አርታዒው ተግባራዊውን ዋጋ እና ከየትኛው ንብርብር እንደመጣ ያሳያል።
-- `connectionAwareExpansion` (በቅደም ተከተል የጥምረት ውቅር፣ ከዚያ ቅንብሮች፣ ነባሪው **false**) ከመዞሩ በፊት እያንዳንዱን በአቅራቢ-ደረጃ ያለ ደረጃ ወደ በእያንዳንዱ-መለያ ዒላማዎች ያስፋፋል። የGroup-B ስልቶች (priority, weighted, round-robin, random, p2c, least-used, cost-optimized, lkgp, fill-first, strict-random, context-optimized, cache-optimized, context-relay, fusion, pipeline) ይህ እስኪበራ ድረስ የአቅራቢ-ደረጃ እይታን ይይዛሉ። የጥምረት አርታዒው inherit / on / off አማራጮችን ያቀርባል፤ inherit ዓለም አቀፉን ነባሪ (off) ይጠቀማል።
-- የጥያቄ-ቋት አካባቢያዊነት ማዘዋወር (`promptCacheAffinityEnabled`፣ ነባሪው **true**) ተመሳሳይ የቋት ቁልፎች በአንድ መለያ ላይ እንዲቆዩ የተሰኩ ግንኙነቶችን እንደገና ያደራጃል። በተሰኩ የበእያንዳንዱ-መለያ ደረጃዎች ላይ ከround-robin እና weighted መዞር ቅድሚያ ይኖረዋል። ጥብቅ መዞር ካስፈለገዎት በSettings → Combo defaults ስር ያጥፉት። ለእያንዳንዱ ጥምረት የተለየ መሻሪያ የለም።
+- `stickyRoundRobinLimit` (በመጀመሪያ የጥምረት ውቅር፣ ከዚያ `comboStickyRoundRobinLimit`፣ ከዚያ
+  `settings.stickyRoundRobinLimit`፣ ነባሪው **3**) ከመዞሩ በፊት ለዚያ ያህል
+  ተከታታይ ስኬቶች ተመሳሳዩን ዒላማ ይይዛል። ለእያንዳንዱ ጥያቄ ማዞር የጥምረቱን መሻሪያ ወደ `1`
+  ያዋቅሩ። የጥምረት አርታዒው ተግባራዊውን ዋጋ እና ከየትኛው ንብርብር እንደመጣ ያሳያል።
+- `connectionAwareExpansion` (በመጀመሪያ የጥምረት ውቅር፣ ከዚያ ቅንብሮች፣ ነባሪው **false**) ከመዞር በፊት
+  እያንዳንዱን በአቅራቢ ደረጃ ያለ እርምጃ ወደ በመለያ የተከፋፈሉ ዒላማዎች ያስፋፋል። የቡድን-B ስልቶች
+  (priority, weighted, round-robin, random, p2c, least-used, cost-optimized, lkgp,
+  fill-first, strict-random, context-optimized, cache-optimized, context-relay, fusion,
+  pipeline) ይህ እስኪበራ ድረስ በአቅራቢ ደረጃ ያለውን እይታ ይጠብቃሉ። የጥምረት አርታዒው
+  ውረስ / አብራ / አጥፋ የሚሉ ምርጫዎችን ያቀርባል፤ ውረስ ዓለም አቀፋዊውን ነባሪ (አጥፋ) ይጠቀማል።
+- የጥያቄ-መሸጎጫ አካባቢያዊነት ማዞሪያ (`promptCacheAffinityEnabled`፣ ነባሪው **true**) ተዛማጅ የመሸጎጫ ቁልፎች
+  በአንድ መለያ ላይ እንዲቆዩ የተሰኩ ግንኙነቶችን እንደገና ያስተካክላል። በመለያ በተከፋፈሉ የተሰኩ ደረጃዎች መካከል
+  ከround-robin እና weighted ማዞር ይቀድማል። ጥብቅ ማዞር ከፈለጉ በ
+  Settings → Combo defaults ስር ያጥፉት። በየጥምረቱ የሚደረግ መሻሪያ የለም።
 
-በአንድ ሞዴል ላይ ለባለብዙ-መለያ መዞር፣ ሦስት የተሰኩ `connectionId`ዎችን ከመጠቀም ይልቅ ተጣባቂ ገደቡ `1` የሆነ **አንድ ተለዋዋጭ-መለያ ደረጃ** (ባዶ `connectionId`፣ ሙሉ ስብስቡ) መጠቀም ይመረጣል። የተሰኩ ደረጃዎች ከአቻነት ጋር ሲጣመሩ፣ የRR ቆጣሪው እየጨመረ ቢሄድም በተመሳሳዩ መለያ ላይ ይሰባሰባሉ።
+በአንድ ሞዴል ላይ ለባለብዙ መለያ ማዞር፣ ሶስት የተሰኩ `connectionId`ዎችን ከመጠቀም ይልቅ
+ቋሚ ገደቡ `1` የሆነ **አንድ ተለዋዋጭ-መለያ ደረጃ** (ባዶ
+`connectionId`፣ ሙሉ ስብስብ) ይምረጡ። የተሰኩ ደረጃዎች ከዝምድና ጋር ሲጣመሩ፣ የRR ቆጣሪው
+እየጨመረ ቢሆንም እንኳ ወደ ተመሳሳዩ መለያ ይጠቃለላሉ።
 
 ## የFusion ስትራቴጂ
 
@@ -796,13 +818,13 @@ offline-friendly) «የክብደት መገለጫዎች በየጥቅሉ» ሰን�
 
 | ፋይል                                                       | ዓላማ                                                                                                    |
 | :-------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
-| `open-sse/services/autoCombo/scoring.ts`                  | ባለ16-ምክንያት የውጤት አሰጣጥ ፈንክሽን፣ `DEFAULT_WEIGHTS`፣ የpool መደበኛነት ማስያ                                        |
-| `open-sse/services/autoCombo/taskFitness.ts`              | የModel × task ተስማሚነት ፍለጋ                                                                               |
+| `open-sse/services/autoCombo/scoring.ts`                  | ባለ16-ምክንያት የውጤት አሰጣጥ ፈንክሽን፣ `DEFAULT_WEIGHTS`፣ የpool መደበኛነት                                            |
+| `open-sse/services/autoCombo/taskFitness.ts`              | የModel × task ብቃት ፍለጋ                                                                                  |
 | `open-sse/services/autoCombo/engine.ts`                   | የምርጫ ሎጂክ፣ bandit፣ የበጀት ገደብ                                                                             |
-| `open-sse/services/autoCombo/selfHealing.ts`              | ማግለል፣ ሙከራዎች፣ የክስተት ሁነታ                                                                                 |
+| `open-sse/services/autoCombo/selfHealing.ts`              | ማግለል፣ probes፣ የincident ሁነታ                                                                            |
 | `open-sse/services/autoCombo/modePacks.ts`                | 6 የክብደት መገለጫዎች (ship-fast፣ cost-saver፣ quality-first፣ offline-friendly፣ reliability-first፣ chaos-mode) |
-| `open-sse/services/autoCombo/autoPrefix.ts`               | የ`auto/` ቅድመ-ቅጥያ ተንታኝ + 6 ልዩነቶች                                                                        |
-| `open-sse/services/autoCombo/virtualFactory.ts`           | ከቀጥታ ግንኙነቶች የበማህደረ ትውስታ ውስጥ `AutoComboConfig` ይገነባል                                                    |
-| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | የprovider registryን ለመቅረጽ የሙከራ ማያያዣ                                                                    |
-| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (19 ስልቶች)                                                                    |
+| `open-sse/services/autoCombo/autoPrefix.ts`               | `auto/` ቅድመ ቅጥያ parser + 6 ልዩነቶች                                                                       |
+| `open-sse/services/autoCombo/virtualFactory.ts`           | ከቀጥታ connections የin-memory `AutoComboConfig` ይገነባል                                                    |
+| `open-sse/services/autoCombo/providerRegistryAccessor.ts` | provider registryን ለመቅዳት የሙከራ hook                                                                     |
+| `src/shared/constants/routingStrategies.ts`               | `ROUTING_STRATEGY_VALUES` (20 strategies)                                                              |
 | `src/sse/handlers/chat.ts`                                | ውህደት፦ የauto-prefix አጭር ዙር                                                                              |

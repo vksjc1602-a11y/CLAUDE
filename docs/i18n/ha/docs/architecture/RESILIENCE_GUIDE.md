@@ -224,129 +224,189 @@ Hanyoyin da ke da alaƙa suna ci gaba da kasancewa dabam:
 
 **Iyaka:** haɗin provider + connection + model.
 
-**Iyakokin maɓalli bisa status:** status ɗin da ya gaza ne yake tantance maɓallin da za a rubuta kullewa
+**Iyar maɓalli bisa matsayi:** matsayin da ya gaza ne ke tantance maɓallin da za a rubuta kullewa
 a kai (`resolveLockoutScope()` a cikin `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — alamar ƙayyadadden quota ko izinin amfani — suna kulle **rukunin quota**:
+- `429` / `403` / `402` — alamar ƙayyadadden kaso ko izinin amfani — suna kulle **rukunin ƙayyadadden kaso**:
   ga codex, dukkan iyakar `codex` / `spark` (kowane samfurin `gpt-5*` na
-  connection ɗin), ga sauran providers kuma `getQuotaScopedModelForProvider()`.
-- `404` yana kulle ainihin samfurin (`getModelLockKey()` yana taƙaita `not_found`).
-- Duk wani status daban — gazawar jigilar bayanai/server ta `5xx` da kuma
-  `502` da OmniRoute da kansa ya ƙirƙira daga tantance inganci — yana kulle **ainihin**
-  haɗin provider/connection/model kawai. Mummunan stream a kan samfurin guda ɗaya ba hujja ba ce
-  game da quota na account ɗin; kafin wannan ƙa’ida, amsa marar komai guda ɗaya a
+  connection ɗin), ga sauran providers kuwa `getQuotaScopedModelForProvider()`.
+- `404` yana kulle samfurin kai tsaye (`getModelLockKey()` yana taƙaita `not_found`).
+- Duk wani matsayi daban — gazawar jigila/server ta `5xx` da kuma
+  `502` da OmniRoute da kansa ya ƙirƙira daga tabbatar da inganci — yana kulle **ainihin**
+  haɗin provider/connection/model kawai. Mummunan stream a samfuri ɗaya ba shaida ba ce
+  game da ƙayyadadden kason account; kafin wannan ƙa'idar, amsa mara komai guda ɗaya daga
   `codex/gpt-5.6-luna` tana cire kowane samfurin `gpt-5*` na wannan connection daga
-  routing na minti 2–30 (yana ƙaruwa), alhali quota ɗinsa bai taɓu ba.
-- Zaɓin `scope` da mai kira ya bayyana kai tsaye koyaushe shi ne ke da rinjaye (Antigravity yana aika `"exact"`).
+  routing na minti 2–30 (yana ƙaruwa), alhali ba a taɓa ƙayyadadden kason nasa ba.
+- Zaɓin `scope` da caller ya bayyana kai tsaye koyaushe shi ne ke da rinjaye (Antigravity yana tura `"exact"`).
 
-**Manufa:** kauce wa kashe connection gaba ɗaya yayin da samfurin guda ɗaya ne kawai babu shi ko quota ya iyakance shi.
+**Manufa:** guje wa kashe connection gaba ɗaya alhali samfuri ɗaya kawai ne babu shi ko kuma ƙayyadadden kason sa ya yi iyaka.
 
 **Misalai:**
 
-- Providers masu quota na kowane samfurin da suke mayar da 429
-- Providers na gida da suke mayar da 404 saboda samfurin guda ɗaya da babu
-- Gazawar izinin mode/model da ta keɓanta ga provider (misali, modes na Grok)
+- Providers masu ƙayyadadden kaso ga kowane samfuri da ke mayar da 429
+- Providers na cikin gida da ke mayar da 404 saboda samfuri ɗaya da ya ɓace
+- Gazawar izinin yanayi/samfuri da ta keɓanta ga provider (misali, yanayin Grok)
 
 **Aiwatarwa:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Dashboard na Lokutan Jiran Samfuri (v3.8.0)
+### Dashboard na Lokutan Dakatar da Samfuri (v3.8.0)
 
 UI: Settings → Model Cooldowns (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Yana jera kulle-kullen da suke aiki tare da: provider, connection, model, reason, expiresAt. Masu gudanarwa za su iya sake kunna samfurin da hannu daga katin.
+Yana jera kulle-kulle masu aiki tare da: provider, connection, model, reason, expiresAt. Masu gudanarwa za su iya sake kunna samfuri da hannu daga katin.
 
 **REST API:**
 
-- `GET /api/resilience/model-cooldowns` — jera kulle-kullen da suke aiki
+- `GET /api/resilience/model-cooldowns` — jera kulle-kulle masu aiki
 - `DELETE /api/resilience/model-cooldowns` — sake kunnawa da hannu. Body: `{provider, connection, model}`. Auth: management.
 
-### UI na saitunan kullewa + farfaɗowa ta rage gazawa bayan nasara (v3.8.23)
+### Mai Kula da Lokutan Dakatarwa
 
-Kulle samfurin ya sauya daga ɗabi’ar da aka hardcode mai aiki koyaushe zuwa wata fasali mai cikakken daidaitawa,
-wanda dole ne a zaɓi kunna shi, tare da katin saitunansa da hanyar farfaɗowa mai gyara kanta.
+UI: Monitoring → Cooldown Manager (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Shafi guda ɗaya ga kowane connection da aka cire daga routing saboda wani dalili na wucin gadi, maimakon
+buɗe shafin kowane provider. Yana jera lokutan dakatarwar connection, kulle-kullen samfuri da matakan
+ƙarshe, yana share su bisa kowane connection, ga waɗanda aka zaɓa, ko ga duk connections na wani provider,
+kuma yana gyara ƙa'idodin lokacin dakatarwa da aka fi daidaitawa: `streamStallCooldown.enabled` da lokacin
+dakatarwa na asali na `connectionCooldown` na OAuth / API-key da matsakaicin matakan backoff (ana adanawa ta
+`PATCH /api/resilience`). Ana jera matakan ƙarshe (`banned`, `expired`, `credits_exhausted`) amma
+ba a taɓa share su a nan.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, auth: management):
+
+- `GET /api/resilience/cooldowns[?provider=]` — connections tare da matsayi, sauran lokacin dakatarwa,
+  matakin backoff, nau'in kuskuren ƙarshe da kulle-kullen samfuri (babu credentials)
+- `POST /api/resilience/cooldowns` — body `{connectionIds: string[]}` ko
+  `{all: true, provider?}`; yana mayar da `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### UI na saitunan kullewa + murmurewar raguwar gazawa bayan nasara (v3.8.23)
+
+Kulle samfuri ya sauya daga hali mai lambar da aka kafa wanda yake aiki koyaushe zuwa fasali mai cikakken daidaitawa,
+wanda sai an zaɓi a kunna shi, tare da katin saitunansa da kuma hanyar murmurewa mai gyara kanta.
 
 **Katin saituna:** Settings → Model Lockout
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Wannan **ya bambanta** da `ModelCooldownsCard` na karantawa kawai da ke sama (wanda kawai
-_yake jera_ kulle-kullen da suke aiki) — sabon katin _yana daidaita sigogin_. Ƙimomin tsoho
+Wannan ya **bambanta** da `ModelCooldownsCard` na karantawa kawai da ke sama (wanda kawai
+ke _jera_ kulle-kulle masu aiki) — sabon katin yana _daidaita sigogi_. Tsoffin ƙimomi
 suna cikin `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Saiti                   | Tsoho                            | Ma’ana                                                               |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Babban maɓallin kunnawa — kulle samfurin yana **kashe ta tsohuwa**.  |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Status na upstream da ake ƙirga a matsayin gazawa mai iyakar samfur. |
-| `baseCooldownMs`        | `120_000` (120 s)                | Tsawon lokacin kullewa na farko bayan gazawa ta farko.               |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Iyakar lokacin jiran da aka ƙara.                                    |
-| `maxBackoffSteps`       | `10`                             | Matsakaicin matakan ƙarin jinkiri na exponential-backoff.            |
-| `useExponentialBackoff` | `true`                           | Ko maimaita gazawa za ta ƙara lokacin jira a tsarin exponential.     |
+| Saiti                   | Tsohon ƙima                      | Ma'ana                                                                        |
+| ----------------------- | -------------------------------- | ----------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Babban maɓalli — kulle samfuri **a kashe yake ta tsohuwa**.                   |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Matsayin upstream da ake ƙirgawa a matsayin gazawa ta samfuri.                |
+| `baseCooldownMs`        | `120_000` (120 s)                | Tsawon kullewa na farko saboda gazawar farko.                                 |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Iyakar lokacin dakatarwa bayan ƙaruwa.                                        |
+| `maxBackoffSteps`       | `10`                             | Matsakaicin matakan ƙaruwa na exponential-backoff.                            |
+| `useExponentialBackoff` | `true`                           | Ko gazawa mai maimaituwa za ta ƙara lokacin dakatarwa a tsari na exponential. |
 
-Ana adana saituna ta hanyar ma’ajiyar saituna ta yau da kullum, kuma ana tantance su ta
-resilience settings schema; katin yana iyakance `baseCooldownMs`/`maxCooldownMs`
+Ana adana saituna ta ma'ajiyar saituna ta yau da kullum kuma ana tabbatar da ingancinsu ta
+schema na saitunan resilience; katin yana sanya iyaka ga `baseCooldownMs`/`maxCooldownMs`
 (tare da `maxCooldownMs ≥ baseCooldownMs`) da `maxBackoffSteps`.
 
-**Farfaɗowa ta rage gazawa bayan nasara:** farfaɗowa **ba** ta dogara kawai da ƙarewar timer ba. Amsa mai lafiya
-tana rage adadin gazawar samfurin, saboda samfurin da ya farfaɗo
-a tsakiyar window ya daina ƙara tsawon jira (kuma a share kullensa) kafin timer ɗinsa ya ƙare. Bayan nasarar
-combo target, `open-sse/services/combo.ts` yana kiran `decayModelFailureCount()`
-(`open-sse/services/accountFallback.ts`), wanda yake **raba** adadin da aka adana na
-`failureCount` zuwa rabi (`Math.floor(failureCount / 2)`); idan ya kai `0`, ana share
-lockout entry ɗin gaba ɗaya. Takwaransa `recordModelLockoutFailure()`
-yana ƙara adadin (kuma yana ƙara tsawon lokacin jira) idan gazawa ta faru a cikin
-escalation window. Wannan rage gazawa bayan nasara ƙari ne ga ƙarewar timer kawai —
-kowace hanya na iya sake kunna samfuri.
+**Murmurewar raguwar gazawa bayan nasara:** murmurewa **ba** ƙarewar agogo kaɗai ba ce. Amsa mai lafiya
+tana rage adadin gazawar samfurin domin samfurin da ya murmure
+a tsakiyar lokacin kada ya ci gaba da ƙaruwa (kuma a share shi) kafin agogonsa ya ƙare. Lokacin da combo target ya yi nasara,
+`open-sse/services/combo.ts` yana kiran `decayModelFailureCount()`
+(`open-sse/services/accountFallback.ts`), wanda ke **raba** `failureCount` da aka adana
+biyu (`Math.floor(failureCount / 2)`); idan ya kai `0`, ana share shigarwar kullewar
+gaba ɗaya. Kishiyarsa `recordModelLockoutFailure()`
+tana ƙara adadin (kuma tana ƙara lokacin dakatarwa) idan gazawa ta faru a cikin
+lokacin ƙaruwa. Wannan raguwar gazawa bayan nasara ƙari ne ga ƙarewar agogo ta yau da kullum —
+kowace hanya za ta iya sake kunna samfuri.
 
-**State:** ana riƙe kulle-kullen **a cikin memory** (`Map`s na kowane process na
-`ModelLockoutEntry` waɗanda `provider:connectionId:model` ke zama maɓallinsu, sannan exact-scope locks kuma
-`provider:connectionId:exact:model` ke zama maɓallinsu), ba a adana su a
-DB — suna ɓacewa idan an restart. Ana adana _settings_; amma _state_ na kullewar
-da ke aiki na wucin gadi ne.
+**Matsayi:** ana riƙe kulle-kulle **a cikin memory** (`Map`s na kowane process na
+`ModelLockoutEntry` waɗanda aka yi musu key da `provider:connectionId:model`, kulle-kullen exact-scope kuma da
+`provider:connectionId:exact:model`), ba a adana su a
+DB — suna ɓacewa idan an sake farawa. Ana adana _saitunan_; amma _matsayin_ kullewa mai aiki na wucin gadi ne.
 
 ---
 
-## 4. Sarrafa Aiwatarwa Lokaci Guda na Quota-Share (v3.8.36)
+## 4. Sarrafa Aiki Tare na Quota-Share (v3.8.36)
 
-Asusun biyan kuɗi (GLM, MiniMax, da sauransu) sau da yawa suna karɓar buƙatu masu
-gudana lokaci guda kusan ~1–3 kawai; wuce wannan yana jawo 429 da lokutan dakatawa.
-Wannan matsalar ta fi tsanani a ƙarƙashin haɗaɗɗun **quota-share** (`qtSd/…`), inda
-maɓallan API da yawa suke amfani da asusun upstream guda ɗaya. Matakai uku ne ke
-hana a cika asusun da ake amfani da shi tare da buƙatu masu yawa.
+Asusun biyan kuɗi (GLM, MiniMax, da sauransu) sau da yawa suna karɓar buƙatu masu gudana lokaci guda kusan ~1–3 kawai;
+wuce wannan yana jawo 429s da lokutan jira. Wannan ya fi tsanani a ƙarƙashin
+haɗin **quota-share** (`qtSd/…`), inda maɓallan API da yawa ke amfani da asusun
+upstream guda ɗaya. Matakai uku suna hana a cika asusun da ake rabawa da buƙatu.
 
-### Iyakar aiwatarwa lokaci guda ga kowace haɗuwa (`max_concurrent`)
+### Iyakar aiki tare ta kowace haɗi (`max_concurrent`)
 
 Kowace haɗin mai samarwa na iya ayyana iyakar `max_concurrent`
-(`provider_connections.max_concurrent`, ana saita shi a cikin taga haɗi / API / DB).
-A bar shi babu komai idan ba a son iyaka. Wannan shi ne babban saitin da ke sarrafa
-matakin jera aiwatarwa da ke ƙasa — saita shi zuwa ainihin adadin aiwatarwa lokaci
-guda na asusun (misali GLM ~1, MiniMax ~2).
+(`provider_connections.max_concurrent`, ana saita ta a cikin taga haɗi / API / DB).
+A bar ta babu komai idan ba a son iyaka. Wannan shi ne babban saitin da ke tafiyar da tsarin jere-jere
+da ke ƙasa — saita shi zuwa ainihin ƙarfin aikin tare na asusun (misali GLM ~1, MiniMax ~2).
+
+### Iyakokin aiki tare na kowace samfur (`modelConcurrency`)
+
+Har ila yau, haɗi na iya ayyana takamaiman iyakokin aiki tare na kowace samfur
+a cikin taswirar `rateLimitOverrides`:
+
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Saita shi a cikin taga haɗi (**Sauya iyakokin ƙima → Iyakokin aiki tare
+na kowace samfur**, `model=cap` ɗaya a kowane layi) ko ta hanyar
+`PATCH /api/providers/[id]` tare da tsarin JSON iri ɗaya. Ma’anonin maɓallan:
+
+- **Na dukan haɗi da na takamaiman samfur:** `maxConcurrent` yana ci gaba da zama iyakar
+  da dukan haɗin ke rabawa. Idan duka biyun suna aiki, ana mallakar ƙofofin biyu
+  lokaci guda a cikin ƙofar haɗaka ɗaya
+  (`global → provider → account → model`); halayen da za su yi aiki su ne
+  na iyaka mafi tsauri.
+- **Daidaituwar maɓallin samfur kai tsaye:** maɓallin shi ne kirtanin samfur da aka aika zuwa
+  executor bayan warware routing — yawanci ainihin upstream model id ne
+  (`glm-5`), ba alias na `provider/model` daga ɓangaren client ba (`zai/glm-5` ba ya
+  dacewa da `glm-5`). Dole ne ƙimomin su zama tabbatattun lambobi cikakku na iyakar buƙatun da ke gudana lokaci guda.
+- **Jera a gida, babu ganowa:** buƙatun da suka wuce iyaka suna jira a jeri a gida bisa
+  ƙa’idojin jeri/lokacin ƙarewa da ake da su (kurakuran shigarwa masu nau’in `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL`). OmniRoute ba ya gano ko
+  hasashen dokar upstream — yana tilasta ainihin iyakokin da mai gudanarwa
+  ya saita. Cikakken ƙofar samfur ba ya taɓa kashe mai samarwa kuma ba ya
+  haifar da kulle samfur na dindindin; halayen upstream na 429/cooldown/fallback
+  suna ci gaba da zama kariyar ƙarshe idan an samu kuskure.
+- **Iko na kowace haɗi, kowace process:** iyakokin na kowace haɗin database ne
+  kuma ana riƙe su a cikin memory, don haka haɗi biyu da ke sake amfani da upstream API key
+  ɗaya ba sa daidaita aiki da juna.
+- **Rashin saiti yana nufin babu canji:** barin taswirar ba tare da haɗa ta ba (ko barin filin
+  dashboard babu komai) ba ya ƙara ƙofar samfur. Misalin saiti ba tare da
+  ayyana wata iyaka ta gama-gari ga mai samarwa ba:
+
+```text
+glm-5=1
+glm-4.7=3
+```
 
 ### Jera buƙatun quota-share
 
-Lokacin da aikawar quota-share ta nufi wani haɗi da ya ayyana tabbataccen
-`max_concurrent`, ana jera buƙatun da ke gudana lokaci guda zuwa wannan **asusun**
-ta hanyar semaphore na kowace haɗuwa (maɓalli `qsconn:<connectionId>`): buƙatun da
-suka wuce iyaka suna **jira a jerin gwano** maimakon cika asusun. Yana aiki da
-tsarin **fail-open** — idan jerin gwano ya cika ko lokaci ya ƙare, za a ci gaba ba
-tare da gurbi ba maimakon a taɓa ƙin buƙatar da za a iya aikawa. Ana kunna ko kashe
-shi a **Settings → Resilience → Quota-share per-connection concurrency**
-(`resilienceSettings.quotaShareConcurrencyLimit.enabled`, yana kunne ta asali).
-Idan babu iyakar `max_concurrent`, halayen ba sa canzawa.
+Lokacin da dispatch na quota-share ya nufi haɗin da ya ayyana tabbataccen
+`max_concurrent`, ana jera buƙatun da ke gudana lokaci guda zuwa wannan **account** ta hanyar
+semaphore na kowace haɗi (maɓalli `qsconn:<connectionId>`): buƙatun da suka wuce iyaka suna **jira a
+cikin jerin** maimakon cika asusun da buƙatu. Yana aiki da tsarin **fail-open** — cikakken
+jeri ko ƙarewar lokaci yana ci gaba ba tare da slot ba maimakon ƙin karɓar buƙatar da za a iya
+dispatch a kowane hali. Kunna ko kashe shi a **Settings → Resilience → Quota-share per-connection
+concurrency** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, yana kunne
+ta asali). Idan babu iyakar `max_concurrent`, halayen ba sa canzawa.
 
-> Ƙofar zaɓin hanya ta quota-share (`selectQuotaShareTarget`, DRR + P2C) ita ma
-> tana aiki da tsarin fail-open kuma kawai tana _rage fifikon_ haɗin da ya kai
-> iyaka — idan tafkin yana da haɗi guda ɗaya ba za ta iya tilasta iyaka kai tsaye
-> ba, don haka wannan semaphore ne a zahiri yake hana ambaliyar buƙatu.
+> Ƙofar routing ta quota-share (`selectQuotaShareTarget`, DRR + P2C) ita ma
+> fail-open ce kuma kawai tana _rage fifiko_ ga haɗin da ya kai iyaka — idan
+> pool ɗin yana da haɗi guda ɗaya ba za ta iya tilasta iyaka kai tsaye ba, don haka wannan semaphore ne a zahiri
+> yake hana ambaliyar buƙatun.
 
-### Sake gwadawa bisa la’akari da lokacin dakatawar combo
+### Sake gwadawa mai la’akari da combo cooldown
 
-Ga kowace dabarar combo (idan an kunna), buƙatar da za ta tabbatar da 429 saboda
-TAKAITACCEN lokacin dakatawa na wucin gadi za ta jira lokacin ya ƙare sannan a sake
-aikawa maimakon mayar da 429 — wannan yana rufe tagogin TPM/RPM na ajin Gemini
-(~60s retry-after) a haɗaɗɗun combo na samfura da yawa, misali idan dukkan
-manufofin combo mai samfura 2 suka ci karo da iyakar ƙimar kowane samfuri. Ana
-iyakance shi da `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) a cikin **Settings → Resilience**. Ba ya taɓa jira kan
-`quota_exhausted` (an kulle har tsakar dare) ko dalilan tantancewa/rashin samu.
+Ga kowace dabarar combo (idan an kunna), buƙatar da za ta tabbatar da 429
+saboda ɗan gajeren cooldown na wucin gadi tana jira ya ƙare sannan a sake dispatch maimakon
+mayar da 429 — wannan ya haɗa da tagogin TPM/RPM irin na Gemini (~60s retry-after)
+a kan combo masu samfur da yawa, misali idan duk targets na combo mai samfur 2 suka ci karo da
+rate limit na kowace samfur. `comboCooldownWait` ne ke iyakance shi (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) a cikin **Settings → Resilience**. Ba ya taɓa jira kan `quota_exhausted`
+(an kulle har tsakar dare) ko dalilan auth/not-found.
 
 ---
 

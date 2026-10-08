@@ -222,127 +222,192 @@ Susiję mechanizmai išlieka atskirti:
 
 ## 3. Modelio blokavimas
 
-**Aprėptis:** teikėjo, ryšio ir modelio trejetas.
+**Aprėptis:** teikėjo + ryšio + modelio trejetas.
 
-**Rakto aprėptis pagal būseną:** nesėkmės būsena nulemia, kuriam raktui įrašomas blokavimas
+**Rakto aprėptis pagal būseną:** nesėkmės būsenos kodas nustato, kuriam raktui bus taikomas blokavimas
 (`resolveLockoutScope()` faile `open-sse/services/accountFallback/exactModelLock.ts`):
 
-- `429` / `403` / `402` — kvotos arba prieigos teisių signalas — blokuojama **kvotos šeima**:
-  „codex“ atveju visa `codex` / `spark` aprėptis (kiekvienas ryšio `gpt-5*`
-  modelis), kitų teikėjų atveju – `getQuotaScopedModelForProvider()`.
-- `404` blokuoja tik patį modelį (`getModelLockKey()` susiaurina `not_found`).
-- Bet kuri kita būsena — `5xx` perdavimo / serverio klaidos ir pačios „OmniRoute“
-  sugeneruota `502` būsena po kokybės patikros — blokuoja tik **tikslų**
-  teikėjo / ryšio / modelio trejetą. Netinkamas vieno modelio srautas nėra įrodymas
-  apie paskyros kvotą; iki šios taisyklės vienas tuščias
-  `codex/gpt-5.6-luna` atsakas pašalindavo visus to ryšio `gpt-5*` modelius iš
-  maršruto parinkimo 2–30 min. (laikui ilgėjant), nors jo kvota likdavo nepaliesta.
-- Iškvietėjo aiškiai nurodyta `scope` parinktis visada turi pirmenybę („Antigravity“ perduoda `"exact"`).
+- `429` / `403` / `402` — kvotos arba prieigos teisės signalas — blokuojama **kvotos šeima**:
+  „codex“ atveju visa `codex` / `spark` aprėptis (kiekvienas ryšio `gpt-5*` modelis),
+  o kitų teikėjų atveju — `getQuotaScopedModelForProvider()`.
+- `404` blokuoja konkretų modelį (`getModelLockKey()` susiaurina `not_found`).
+- Bet kuri kita būsena — `5xx` transportavimo / serverio klaidos ir pačios „OmniRoute“
+  sugeneruota `502` būsena, atsirandanti tikrinant kokybę — blokuoja tik **tikslų**
+  teikėjo / ryšio / modelio trejetą. Netinkamas vieno modelio srautas nėra paskyros
+  kvotos problemos įrodymas; iki šios taisyklės dėl vieno tuščio
+  `codex/gpt-5.6-luna` atsakymo visi to ryšio `gpt-5*` modeliai būdavo pašalinami iš
+  maršruto parinkimo 2–30 min. laikotarpiui (trukmei ilgėjant), nors kvota likdavo nepaliesta.
+- Aiškiai nurodyta iškvietėjo `scope` parinktis visada turi pirmenybę („Antigravity“ perduoda `"exact"`).
 
 **Paskirtis:** neleisti išjungti viso ryšio, kai nepasiekiamas arba kvotos apribotas tik vienas modelis.
 
 **Pavyzdžiai:**
 
-- Teikėjai, taikantys atskirų modelių kvotas ir grąžinantys 429
+- Atskiro modelio kvotą taikantys teikėjai, grąžinantys 429
 - Vietiniai teikėjai, grąžinantys 404 dėl vieno trūkstamo modelio
-- Konkrečiam teikėjui būdingos režimo / modelio leidimų klaidos (pvz., „Grok“ režimai)
+- Konkretaus teikėjo režimo / modelio leidimų klaidos (pvz., „Grok“ režimai)
 
 **Įgyvendinimas:** `open-sse/services/accountFallback.ts` — `lockModel()`, `clearModelLock()`, `getAllModelLockouts()`.
 
-### Modelių atvėsimo laikotarpių suvestinė (v3.8.0)
+### Modelių atvėsimo laikotarpių skydelis (v3.8.0)
 
 Naudotojo sąsaja: Nustatymai → Modelių atvėsimo laikotarpiai (`src/app/(dashboard)/dashboard/settings/components/ModelCooldownsCard.tsx`)
 
-Pateikiami aktyvūs blokavimai su šiais laukais: teikėjas, ryšys, modelis, priežastis, expiresAt. Operatoriai kortelėje gali rankiniu būdu iš naujo įjungti modelį.
+Pateikiamas aktyvių blokavimų sąrašas su: teikėju, ryšiu, modeliu, priežastimi ir `expiresAt`. Operatoriai kortelėje gali rankiniu būdu iš naujo įjungti modelį.
 
 **REST API:**
 
 - `GET /api/resilience/model-cooldowns` — pateikti aktyvių blokavimų sąrašą
-- `DELETE /api/resilience/model-cooldowns` — rankiniu būdu įjungti iš naujo. Turinys: `{provider, connection, model}`. Autentifikavimas: valdymo.
+- `DELETE /api/resilience/model-cooldowns` — rankiniu būdu įjungti iš naujo. Turinys: `{provider, connection, model}`. Autorizacija: valdymo.
 
-### Blokavimo nustatymų naudotojo sąsaja ir atkūrimas mažinant skaitiklį po sėkmės (v3.8.23)
+### Atvėsimo laikotarpių tvarkytuvė
 
-Modelio blokavimas iš visada įjungto, programiniame kode fiksuoto veikimo tapo visiškai konfigūruojama,
-pasirenkama funkcija su atskira nustatymų kortele ir savaime atsikuriančiu atkūrimo mechanizmu.
+Naudotojo sąsaja: Stebėjimas → Atvėsimo laikotarpių tvarkytuvė (`src/app/(dashboard)/dashboard/resilience/cooldowns/`).
+
+Vienas puslapis kiekvienam ryšiui, kuris dėl laikinos priežasties pašalintas iš maršruto parinkimo, kad
+nereikėtų atverti kiekvieno teikėjo puslapio. Jame pateikiami ryšių atvėsimo laikotarpiai, modelių blokavimai ir galutinės
+būsenos; jie išvalomi atskiram ryšiui, pažymėtai grupei arba visiems teikėjo ryšiams.
+Taip pat galima redaguoti dažniausiai derinamas atvėsimo laikotarpių taisykles: `streamStallCooldown.enabled` ir OAuth / API rakto
+`connectionCooldown` bazinį atvėsimo laikotarpį bei didžiausią kartotinio atidėjimo žingsnių skaičių (įrašoma naudojant
+`PATCH /api/resilience`). Galutinės būsenos (`banned`, `expired`, `credits_exhausted`) yra
+rodomos, bet čia niekada neišvalomos.
+
+**REST API** (`src/lib/resilience/cooldownManager.ts`, autorizacija: valdymo):
+
+- `GET /api/resilience/cooldowns[?provider=]` — ryšiai su būsena, likusiu atvėsimo laikotarpiu,
+  kartotinio atidėjimo lygiu, paskutinės klaidos tipu ir modelių blokavimais (be prisijungimo duomenų)
+- `POST /api/resilience/cooldowns` — turinys `{connectionIds: string[]}` arba
+  `{all: true, provider?}`; grąžina `{cleared, unchanged, skippedTerminal, lockoutsCleared}`
+
+### Blokavimo nustatymų naudotojo sąsaja + sėkmingų atsakymų mažinamas klaidų skaičius (v3.8.23)
+
+Modelio blokavimas iš visada įjungto, programiniame kode fiksuoto veikimo buvo pakeistas į visiškai konfigūruojamą,
+pasirinktinai įjungiamą funkciją su atskira nustatymų kortele ir savaiminio atsikūrimo mechanizmu.
 
 **Nustatymų kortelė:** Nustatymai → Modelio blokavimas
 (`src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx`).
-Ji **skiriasi** nuo anksčiau nurodytos tik skaitomos `ModelCooldownsCard` (kuri tik
+Ji **skiriasi** nuo anksčiau minėtos tik skaitomos `ModelCooldownsCard` (kuri tik
 _pateikia_ aktyvių blokavimų sąrašą) — naujoji kortelė _konfigūruoja parametrus_. Numatytosios
-reikšmės apibrėžtos `DEFAULT_MODEL_LOCKOUT_SETTINGS`
+reikšmės pateikiamos `DEFAULT_MODEL_LOCKOUT_SETTINGS`
 (`src/lib/resilience/modelLockoutSettings.ts`):
 
-| Nustatymas              | Numatytoji reikšmė               | Reikšmė                                                                                      |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------------------- |
-| `enabled`               | `false`                          | Pagrindinis jungiklis — pagal numatytuosius nustatymus modelių blokavimas yra **išjungtas**. |
-| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Aukštesnio lygmens paslaugos būsenos, laikomos su modeliu susijusia triktimi.                |
-| `baseCooldownMs`        | `120_000` (120 s)                | Pradinė pirmosios trikties blokavimo trukmė.                                                 |
-| `maxCooldownMs`         | `1_800_000` (30 min)             | Didėjančio atvėsimo laikotarpio viršutinė riba.                                              |
-| `maxBackoffSteps`       | `10`                             | Didžiausias eksponentinio delsos didinimo žingsnių skaičius.                                 |
-| `useExponentialBackoff` | `true`                           | Ar pasikartojančios triktys eksponentiškai ilgina atvėsimo laikotarpį.                       |
+| Nustatymas              | Numatytoji reikšmė               | Reikšmė                                                                                  |
+| ----------------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
+| `enabled`               | `false`                          | Pagrindinis jungiklis — modelio blokavimas **pagal numatytuosius nustatymus išjungtas**. |
+| `errorCodes`            | `[403, 404, 429, 502, 503, 504]` | Išorinio serverio būsenos, laikomos su modeliu susijusia klaida.                         |
+| `baseCooldownMs`        | `120_000` (120 s)                | Pradinė blokavimo trukmė po pirmosios klaidos.                                           |
+| `maxCooldownMs`         | `1_800_000` (30 min)             | Ilginamo atvėsimo laikotarpio viršutinė riba.                                            |
+| `maxBackoffSteps`       | `10`                             | Didžiausias eksponentinio kartotinio atidėjimo ilginimo žingsnių skaičius.               |
+| `useExponentialBackoff` | `true`                           | Ar po pasikartojančių klaidų atvėsimo laikotarpis ilginamas eksponentiškai.              |
 
 Nustatymai išsaugomi įprastoje nustatymų saugykloje ir tikrinami pagal
 atsparumo nustatymų schemą; kortelė apriboja `baseCooldownMs` / `maxCooldownMs`
-(kai `maxCooldownMs ≥ baseCooldownMs`) ir `maxBackoffSteps`.
+(kad `maxCooldownMs ≥ baseCooldownMs`) ir `maxBackoffSteps`.
 
-**Atkūrimas mažinant skaitiklį po sėkmės:** atkūrimas grindžiamas **ne vien** laikmačio galiojimo pabaiga. Tinkamas
-atsakas sumažina modelio trikčių skaičių, todėl per esamą laikotarpį atsikūręs modelis
-nustoja ilginti blokavimo laiką (ir blokavimas pašalinamas) dar nepasibaigus laikmačiui. Kai kombinuotas
-tikslas sėkmingai atsako, `open-sse/services/combo.ts` iškviečia `decayModelFailureCount()`
+**Atkūrimas mažinant klaidų skaičių po sėkmingo atsakymo:** atkūrimas **nėra** pagrįstas vien laikmačio galiojimo pabaiga. Tinkamas
+atsakymas palaipsniui sumažina modelio klaidų skaičių, todėl per laikotarpio vidurį atsikūręs modelis
+nustoja ilginti atvėsimo laikotarpį (ir blokavimas pašalinamas) anksčiau, nei baigtųsi jo laikmatis. Sėkmingai apdorojus
+kombinuotą tikslą, `open-sse/services/combo.ts` iškviečia `decayModelFailureCount()`
 (`open-sse/services/accountFallback.ts`), kuri **perpus sumažina** išsaugotą
-`failureCount` (`Math.floor(failureCount / 2)`); kai reikšmė pasiekia `0`, blokavimo
+`failureCount` (`Math.floor(failureCount / 2)`); jam pasiekus `0`, blokavimo
 įrašas visiškai pašalinamas. Atitinkama funkcija `recordModelLockoutFailure()`
-padidina skaitiklį (ir pailgina atvėsimo laikotarpį), kai per ilginimo
-laikotarpį įvyksta trikčių. Šis mažinimas po sėkmės papildo įprastą laikmačio galiojimo pabaigą —
-modelį iš naujo gali įjungti bet kuris iš šių mechanizmų.
+padidina skaičių (ir pailgina atvėsimo laikotarpį), kai klaidų įvyksta per
+ilginimo laikotarpį. Šis mažinimas po sėkmingo atsakymo papildo įprastą laikmačio galiojimo pabaigą —
+modelį galima iš naujo įjungti bet kuriuo iš šių būdų.
 
-**Būsena:** blokavimai laikomi **atmintyje** (kiekvieno proceso `Map` objektuose su
-`ModelLockoutEntry` reikšmėmis, indeksuojamomis pagal `provider:connectionId:model`, o tikslios aprėpties blokavimai —
-pagal `provider:connectionId:exact:model`), o DB jie
-neišsaugomi — paleidus iš naujo jie prarandami. _Nustatymai_ išsaugomi, tačiau aktyvi
+**Būsena:** blokavimai laikomi **atmintyje** (atskiri kiekvieno proceso `Map` tipo
+`ModelLockoutEntry` rinkiniai, kurių raktas yra `provider:connectionId:model`, o tikslios aprėpties blokavimų —
+`provider:connectionId:exact:model`), ir nėra išsaugomi
+DB — paleidus iš naujo jie prarandami. _Nustatymai_ išsaugomi, o aktyvi
 blokavimo _būsena_ yra laikina.
 
 ---
 
 ## 4. Kvotos bendrinimo lygiagretumo valdymas (v3.8.36)
 
-Prenumeratos paskyros (GLM, MiniMax ir kt.) dažnai vienu metu priima tik ~1–3
-užklausas; viršijus šią ribą gaunami 429 atsakymai ir taikomi atvėsimo laikotarpiai. Tai ypač aktualu naudojant
-**kvotos bendrinimo** (`qtSd/…`) derinius, kai keli API raktai bendrai naudoja vieną išorinę
-paskyrą. Trys lygmenys apsaugo bendrinamą paskyrą nuo užtvindymo.
+Prenumeratos paskyros (GLM, MiniMax ir kt.) dažnai leidžia tik ~1–3 lygiagrečias
+užklausas; viršijus šią ribą gaunami 429 atsakymai ir pritaikomi atvėsimo laikotarpiai. Tai ypač aktualu naudojant
+**kvotos bendrinimo** (`qtSd/…`) derinius, kai keli API raktai bendrina vieną tiekėjo
+paskyrą. Trys sluoksniai apsaugo bendrinamą paskyrą nuo užtvindymo užklausomis.
 
-### Vieno ryšio lygiagretumo riba (`max_concurrent`)
+### Ryšio lygiagretumo riba (`max_concurrent`)
 
-Kiekvienam teikėjo ryšiui galima nurodyti `max_concurrent` ribą
-(`provider_connections.max_concurrent`, nustatoma ryšio modaliniame lange / API / DB).
-Jei apribojimas nereikalingas, palikite lauką tuščią. Tai vienintelis parametras, valdantis toliau aprašytą
-nuoseklaus vykdymo lygmenį — nustatykite jį pagal faktinį paskyros lygiagretumą (pvz., GLM ~1, MiniMax ~2).
+Kiekvienam tiekėjo ryšiui galima nurodyti `max_concurrent` viršutinę ribą
+(`provider_connections.max_concurrent`, nustatomą ryšio modaliniame lange / API / DB).
+Jei ribos nereikia, palikite lauką tuščią. Tai vienintelis parametras, valdantis toliau aprašytą
+nuoseklaus vykdymo sluoksnį — nustatykite tikrąjį paskyros lygiagretumą (pvz., GLM ~1, MiniMax ~2).
 
-### Kvotos bendrinimo užklausų vykdymas nuosekliai
+### Modelio lygiagretumo ribos (`modelConcurrency`)
 
-Kai kvotos bendrinimo persiuntimas nukreipiamas į ryšį, kuriam nustatyta teigiama
-`max_concurrent` reikšmė, lygiagrečios užklausos tai **paskyrai** vykdomos nuosekliai naudojant
-atskirą kiekvieno ryšio semaforą (raktas `qsconn:<connectionId>`): perteklinės užklausos **laukia
-eilėje**, užuot užtvindžiusios paskyrą. Taikomas **fail-open** principas — jei eilė perpildyta
-arba baigiasi skirtasis laikas, vykdymas tęsiamas negavus vietos, užuot atmetus persiųsti tinkamą
-užklausą. Įjunkite arba išjunkite skiltyje **Nustatymai → Atsparumas → Kvotos bendrinimo lygiagretumas
-vienam ryšiui** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, pagal numatytuosius nustatymus
-įjungta). Nenustačius `max_concurrent` ribos, veikimas nesikeičia.
+Ryšiui taip pat galima nurodyti tikslias kiekvieno modelio lygiagretumo ribas
+jo `rateLimitOverrides` atvaizdyje:
 
-> Pats kvotos bendrinimo maršruto parinkimo mechanizmas (`selectQuotaShareTarget`, DRR + P2C)
-> veikia pagal fail-open principą ir tik suteikia _mažesnį prioritetą_ ribą pasiekusiam ryšiui — kai
+```json
+{
+  "rateLimitOverrides": {
+    "maxConcurrent": 4,
+    "modelConcurrency": { "glm-5": 1, "glm-4.7": 3 }
+  }
+}
+```
+
+Nustatykite tai ryšio modaliniame lange (**Spartos apribojimų perrašymai → Modelių
+lygiagretumo ribos**, po vieną `model=cap` kiekvienoje eilutėje) arba naudodami
+`PATCH /api/providers/[id]` su tokios pačios struktūros JSON. Raktų semantika:
+
+- **Viso ryšio ir konkretaus modelio ribos:** `maxConcurrent` išlieka bendra
+  viso ryšio viršutine riba. Kai taikomos abi ribos, abu leidimai gaunami
+  atomiškai tame pačiame sudėtiniame ribotuve
+  (`global → provider → account → model`); faktiškai taikoma
+  griežtesnė riba.
+- **Tikslus modelio rakto atitikimas:** raktas yra modelio eilutė, perduodama
+  vykdikliui po maršruto nustatymo — paprastai tai yra paprastas tiekėjo modelio ID
+  (`glm-5`), o ne kliento pusės `provider/model` alternatyvusis pavadinimas (`zai/glm-5`
+  neatitinka `glm-5`). Reikšmės yra teigiami sveikieji lygiagrečių užklausų ribų skaičiai.
+- **Vietinė eilė, be automatinio nustatymo:** perteklinės užklausos įtraukiamos į vietinę eilę pagal
+  esamą eilės / skirtojo laiko semantiką (tipizuotos `SEMAPHORE_TIMEOUT` /
+  `SEMAPHORE_QUEUE_FULL` priėmimo klaidos). OmniRoute neaptinka ir
+  nenustato tiekėjo politikos — jis įgyvendina tiksliai tas ribas, kurias
+  sukonfigūravo operatorius. Prisotintas modelio ribotuvas niekada neišjungia tiekėjo ir
+  niekada nesukuria nuolatinio modelio blokavimo; tiekėjo 429 / atvėsimo / atsarginio maršruto elgsena
+  išlieka galutine apsauga klaidos atveju.
+- **Kiekvienam ryšiui, kiekviename procese:** ribos taikomos kiekvienam duomenų bazės ryšiui
+  ir laikomos atmintyje, todėl du ryšiai, pakartotinai naudojantys tą patį tiekėjo API raktą,
+  tarpusavyje nekoordinuojami.
+- **Nesukonfigūruota reiškia nepakeista:** praleidus atvaizdį (arba palikus
+  prietaisų skydelio lauką tuščią), modelio ribotuvas nepridedamas. Konfigūracijos pavyzdys,
+  kuriuo netvirtinamas joks universalus tiekėjo apribojimas:
+
+```text
+glm-5=1
+glm-4.7=3
+```
+
+### Kvotos bendrinimo užklausų nuoseklus vykdymas
+
+Kai kvotos bendrinimo persiuntimas nukreipiamas į ryšį, kuriam nurodyta teigiama
+`max_concurrent` reikšmė, lygiagrečios užklausos tai **paskyrai** nuosekliai vykdomos naudojant
+kiekvieno ryšio semaforą (raktas `qsconn:<connectionId>`): perteklinės užklausos **laukia
+eilėje**, užuot užtvindžiusios paskyrą. Taikomas **fail-open** principas — esant prisotintai
+eilei arba pasibaigus skirtajam laikui, vykdymas tęsiamas be leidimo, užuot atmetus persiunčiamą
+užklausą. Perjunkite skiltyje **Nustatymai → Atsparumas → Kvotos bendrinimo lygiagretumas
+kiekvienam ryšiui** (`resilienceSettings.quotaShareConcurrencyLimit.enabled`, pagal numatytąją
+nuostatą įjungta). Jei `max_concurrent` riba nenustatyta, elgsena nesikeičia.
+
+> Pats kvotos bendrinimo maršruto ribotuvas (`selectQuotaShareTarget`, DRR + P2C)
+> veikia pagal fail-open principą ir tik _sumažina_ ribą pasiekusio ryšio prioritetą — kai
 > telkinyje yra tik vienas ryšys, jis negali nustatyti griežtos ribos, todėl būtent šis semaforas
-> faktiškai suvaldo užklausų srautą.
+> faktiškai suvaldo užklausų antplūdį.
 
-### Atvėsimo laikotarpius įvertinantis pakartotinis derinių vykdymas
+### Derinių pakartotinis bandymas, atsižvelgiant į atvėsimo laikotarpį
 
-Naudojant bet kurią derinių strategiją (kai ji įjungta), užklausa, dėl kurios galutinai būtų gautas 429
-atsakymas dėl TRUMPO laikino atvėsimo laikotarpio, jo pabaigos palaukia ir yra persiunčiama iš naujo,
-užuot grąžinus 429 — tai apima Gemini klasės TPM/RPM langus (~60 s `retry-after`)
-kelių modelių deriniuose, pvz., kai abu dviejų modelių derinio tikslai pasiekia konkretaus modelio
-užklausų dažnio ribą. Ribas nustato `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
-`budgetMs`) skiltyje **Nustatymai → Atsparumas**. Niekada nelaukiama esant `quota_exhausted`
-(užrakinta iki vidurnakčio) arba autentifikavimo / nerasto ištekliaus priežastims.
+Taikant bet kurią įjungtą derinių strategiją, užklausa, kuri galutinai sukeltų 429 atsaką
+dėl TRUMPO laikino atvėsimo laikotarpio, palaukia, kol jis pasibaigs, ir persiunčiama iš naujo,
+užuot grąžinus 429 — tai apima Gemini klasės TPM / RPM intervalus (~60 s `retry-after`)
+kelių modelių deriniuose, pvz., kai abu 2 modelių derinio tikslai pasiekia konkretaus modelio
+spartos ribą. Ribojama naudojant `comboCooldownWait` (`enabled`, `maxWaitMs`, `maxAttempts`,
+`budgetMs`) skiltyje **Nustatymai → Atsparumas**. Niekada nelaukiama dėl `quota_exhausted`
+(užrakinta iki vidurnakčio) arba autentifikavimo / neradimo priežasčių.
 
 ---
 
